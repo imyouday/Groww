@@ -33,7 +33,11 @@ ALLOWED: dict[str, set[str]] = {
     "chunking": INFRASTRUCTURE | {"registry", "pii", "loading"},
     "embedding": INFRASTRUCTURE | {"registry", "pii", "loading", "chunking"},
     "store": INFRASTRUCTURE | {"registry", "pii", "loading", "chunking", "embedding"},
-    **{name: INFRASTRUCTURE | CORPUS for name in POLICY},
+    **{name: INFRASTRUCTURE | CORPUS for name in POLICY - {"retrieval"}},
+    # 5.1 intent resolution is a sub-stage of retrieval, not a peer of it, so retrieval is the one
+    # policy module allowed to read intents. Every other policy-to-policy edge stays forbidden:
+    # generation must not import retrieval, and guardrails must not import either.
+    "retrieval": INFRASTRUCTURE | CORPUS | {"intents"},
     "pipeline": INFRASTRUCTURE | CORPUS | POLICY,
     "app": {"pipeline", "config", "models", "templates"},
 }

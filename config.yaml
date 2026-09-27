@@ -40,6 +40,13 @@ retrieval:
   gate_threshold: 0.35               # calibrated by eval/run_eval.py per architecture.md §12
   unclassified_gate_margin: 0.10
   require_term_coverage: true
+  # When a scheme is resolved, restrict the candidate pool to it (architecture.md §11.3) or keep
+  # all schemes and let the +0.02 scheme boost and MMR do the disambiguation. Measured in Phase 6:
+  # top-1 is identical either way on the spec queries, but a global pool is what lets MMR pick
+  # across schemes (§11.5) and makes the scheme boost meaningful. The filter is the default
+  # because a hard in-scheme constraint is the stronger guarantee for the citation, and a
+  # cross-scheme slip is a confidently wrong fee. Flip for the Phase 11 ablation.
+  scheme_filter: true
   boosts:
     fact_term: 0.05
     additional_fact_term: 0.05
@@ -48,7 +55,7 @@ retrieval:
   fact_terms:                         # FactFamily -> surface forms used for term-coverage checks
     expense_ratio: ["expense ratio", "ter", "expense ratio and other fees", "charges"]
     exit_load: ["exit load", "exit charges", "load"]
-    min_sip: ["minimum sip", "min sip", "minimum investment", "minimum amount"]
+    min_sip: ["minimum sip", "min sip", "min. for sip", "min. for", "minimum investment", "minimum amount"]
     lock_in: ["lock-in", "lock in", "3 years", "80c", "tax saver"]
     riskometer: ["riskometer", "risk"]
     benchmark: ["benchmark", "index"]

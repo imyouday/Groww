@@ -279,6 +279,29 @@ def query(
     return scored
 
 
+def vectors_for(chunk_ids: list[str], settings: Settings | None = None) -> dict[str, np.ndarray]:
+    """Return the stored embedding for each requested chunk id, for MMR redundancy scoring.
+
+    MMR needs the pairwise similarity *between candidates* (architecture.md §11.5), which the
+    query path cannot supply: it scores each candidate against the query, not against its
+    neighbours. One `get` for the handful of ids in play costs about a millisecond and keeps
+    `query()`'s contract — and Phase 5's tests — untouched.
+    """
+    collection = get_collection(settings or load_settings())
+    if not chunk_ids:
+        return {}
+    result = collection.get(ids=list(chunk_ids), include=["embeddings"])
+    ids = result.get("ids") or []
+    embeddings = result.get("embeddings")
+    if embeddings is None:
+        return {}
+    return {
+        chunk_id: np.asarray(vector, dtype="float32")
+        for chunk_id, vector in zip(ids, embeddings, strict=False)
+        if vector is not None
+    }
+
+
 def stats(settings: Settings | None = None) -> dict[str, Any]:
     """Return the store's build facts: count, collection name, model id and build timestamp."""
     resolved = settings or load_settings()

@@ -100,6 +100,7 @@ class RetrievalSettings:
     gate_threshold: float
     unclassified_gate_margin: float
     require_term_coverage: bool
+    scheme_filter: bool
     boosts: BoostSettings
     fact_terms: dict[str, tuple[str, ...]]
 

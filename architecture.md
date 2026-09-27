@@ -197,7 +197,7 @@ Groww/
 | Loader | `src/loading.py` | Fetch registered URL, snapshot to `data/raw`, clean to `data/processed`, emit `LoadedDoc` | registry, pii |
 | Chunker | `src/chunking.py` | `LoadedDoc` → `list[ChunkRecord]` (semantic sections, tables intact) | config |
 | Encoder | `src/embedding.py` | Singleton `SentenceTransformer`; `embed(list[str]) -> np.ndarray[384]` | model cache |
-| Vector store | `src/store.py` | Create/upsert collection; `query(vector, n, where) -> list[ScoredChunk]`; `stats()` | ChromaDB |
+| Vector store | `src/store.py` | Create/upsert collection; `query(vector, n, where) -> list[ScoredChunk]`; `vectors_for(ids) -> dict[str, np.ndarray]` (Phase 6, for MMR); `stats()` | ChromaDB |
 | Intent resolver | `src/intents.py` | `classify(query) -> IntentResult{intent, scheme_id?, fact_family?, pii_hits}` | registry, pii |
 | Retriever | `src/retrieval.py` | Query rewrite → dense search → lexical boost → MMR → grounding gate → `AssembledContext` | store, registry |
 | Generator | `src/generation.py` | `LLMGenerator` (optional) and `ExtractiveGenerator` behind one protocol; returns `DraftAnswer` | prompts, templates |
@@ -282,6 +282,7 @@ class ScoredChunk:
     keyword_boost: float
     final: float             # dense + boosts
     mmr_selected: bool
+    matched_terms: list[str] = field(default_factory=list)   # added Phase 6, §11.4
 
 @dataclass(frozen=True)
 class AssembledContext:
@@ -673,6 +674,13 @@ Rule-first, ordered, and **exhaustive**; the first match wins, so ordering encod
 
 Ambiguity handling: if rules 2 and 6 both match (e.g., *"What is the exit load on the fund I should buy?"*), rule 2 wins for routing, but the answer body still delivers the fact and closes with the facts-only notice — helpful **and** safe.
 
+**Rule 1 and 2 measured gaps (Phase 6).** The table's regex column is a *family* of surface forms, not a literal string list, and two PRD §5.3 rows were not covered by the forms as first written. Both were found by testing the PRD's own example queries, not by reading the regex:
+
+- Rule 1 missed a pasted Aadhaar. `pii.detect` recognises the digit patterns, but `"1234 5678 9012"` is spaced, and the literal list only matched `"my aadhaar"` — so `aadhaar 1234 5678 9012` fell through to rule 7 and was routed as an ordinary factual question with `needs_evidence=True`. The literal list now matches the identifier *words* themselves (`pan`, `aadhaar`, `folio`, `account number`, `ifsc`, `upi id`, `phone number`, …) rather than only a possessive phrase. The cost is over-refusal: "what is a PAN used for?" now routes to the PII refusal instead of being answered. For a facts-only assistant, refusing is the correct side of that trade (C2).
+- Rule 2 missed two advice framings the PRD requires: the table's `should i` does not match *"the fund **I should** buy"*, and `is it (a )?good` does not match *"**is HDFC ELSS a good** ELSS for me?"* — the PRD's "legal/financial-advice framing" row. Both now route to `ADVICE_REQUEST`, confirmed by the two PRD examples.
+
+The lesson worth keeping: a rule table written as prose is not a test suite. Every PRD §5.3 example is now an assertion in `tests/test_intents.py`.
+
 ### 11.3 5.2 — Query contextualisation
 
 Short queries embed poorly ("exit load?"). The embedded string is therefore:
@@ -684,6 +692,17 @@ f"[{scheme_name or 'HDFC mutual fund'}] {fact_family_label} — {original_query}
 where `fact_family_label` ∈ {`expense ratio and fees`, `exit load`, `minimum SIP amount`, `lock-in period`, `riskometer and benchmark`, `tax statements and reports`}. This injects the corpus's vocabulary at query time, compensating for vocabulary mismatch *without* touching the chunker (PRD §9.3).
 
 Scheme alias resolution: ordered longest-suffix match against `registry.scheme_aliases` (`"large cap"`, `"largecap"`, `"hdfc large cap"`, `"elss"`, `"tax saver"`, `"flexi cap"`, `"equity fund"`, `"small cap"`, `"balanced advantage"`). Unresolved ⇒ no `where` filter (recall preserved).
+
+**`retrieval.scheme_filter` — an ambiguity in this section, resolved and measured (Phase 6).** §11.1 calls the scheme filter "optional" and §11.3's "unresolved ⇒ no filter (recall preserved)" implies a resolved scheme *is* filtered — but §11.4's `+0.02` scheme-match boost and §11.5's MMR rationale ("without MMR the top-5 collapses onto one scheme") both presuppose that *other* schemes are in the candidate pool. Under a hard filter the scheme boost is dead code and MMR has no schemes to diversify across. Both readings were measured on the same queries:
+
+| Query | Filtered pool | Global pool |
+| --- | --- | --- |
+| expense ratio, HDFC Large Cap | top-1 `S1 Overview` (0.864) | top-1 `S1 Overview` (0.864) — same |
+| lock-in, ELSS tax saver | top-1 `S3 About` (0.729) | top-1 `S3 About` (0.729) — same |
+| exit load, flexi cap | top-1 `S2 Minimum investment` | top-1 `S2 Minimum investment` — same |
+| MMR picks (first query) | `S1 S1 S1 S1 S1` | `S1 S4 S1 S2 S1` |
+
+Top-1 is identical either way, so the choice is not about accuracy at rank 1. `scheme_filter: true` is the default because a hard in-scheme constraint is a stronger guarantee for the single citation (C5): a `+0.02` nudge losing a dense-score fight means answering about HDFC Flexi Cap with the Small Cap's fee. Set it to `false` for the Phase 11 ablation, where the global pool is the configuration in which §11.5's diversification claim can actually be tested.
 
 ### 11.4 5.4 — Boost scoring
 
@@ -698,6 +717,13 @@ final = dense + 0.05 * (exact fact-term match in chunk text)
 - Fact terms are matched on the **chunk text** (not just metadata), so the boost is evidence-based, and the matched term is shown in the UI's sources panel so the boost is explainable.
 - Weights live in `config.retrieval.boosts` and are part of ablation A3 (PRD §11.3).
 
+**"Distinct" is doing real work in that formula (Phase 6).** The additional-term increment is per *distinct* term, and two over-counts showed up in the first live trace:
+
+- **Substring containment.** `"exit load"` contains the word `"load"`, which is itself a configured `exit_load` synonym. A plain `in` test pays `0.05 + 0.05` for one mention. Matching is span-based and a term whose characters are already claimed by a longer term is discarded.
+- **Repetition.** The S3 `About HDFC ELSS` chunk says `"tax saver"` three times. Counting occurrences paid it `0.05 + 2 × 0.05 = 0.15` for a family it barely evidences, and it won rank 1 on that borrowed boost (`final` 0.829 against 0.681 for the runner-up). A term now counts once per chunk regardless of how often it appears; the chunk's boost fell to a correct `0.07` (`0.05` term + `0.02` scheme) and its rank 1 became earned rather than purchased.
+
+Matched terms are returned in reading order and carried on `ScoredChunk.matched_terms`, which is what the sources panel renders.
+
 ### 11.5 5.5 — MMR (implemented in-repo, no extra dependency)
 
 ```
@@ -710,6 +736,8 @@ while pool and len(selected) < top_n:
 
 Rationale: the five scheme pages contain near-identical fee tables; without MMR the top-5 collapses onto one scheme. Embeddings are already in hand from the store query, so MMR costs ~5×12 dot products — negligible.
 
+Two implementation notes. MMR needs *candidate-to-candidate* similarity, which `store.query()` cannot supply — it scores each candidate against the query, not against its neighbours — so `store.vectors_for()` fetches the handful of stored vectors MMR actually compares (one `get`, ~1 ms; `query()`'s contract and Phase 5's tests are untouched). And when no vectors are supplied, the redundancy term falls back to token overlap, so `mmr()` is testable in isolation; `retrieve()` always passes the real vectors, so the deployed path measures redundancy with the same cosine geometry the dense stage used.
+
 ### 11.6 5.6 — Grounding gate (D1's enforcement point)
 
 ```
@@ -719,6 +747,40 @@ if needs_evidence and top_score < τ + 0.10 -> NOT_IN_CORPUS   # stricter for un
 ```
 
 Additionally, the gate requires **term coverage**: the assembled context must contain the detected fact term (or its `FactFamily` synonym set). Dense similarity alone can be high for a topically-similar-but-different fact ("direct growth" vs "regular"), so coverage is a hard AND-condition. This is what prevents the classic failure of a fluent, confident, wrong fee.
+
+**Measured: τ alone does not reject out-of-corpus questions, and this is the finding Phase 11 must start from.** Raw MiniLM cosine over this corpus is compressed into a narrow high band, so in-corpus and off-topic questions overlap heavily:
+
+| Query | family | top `final` | gate |
+| --- | --- | --- | --- |
+| expense ratio, HDFC Large Cap | `expense_ratio` | 0.864 | pass |
+| lock-in, ELSS tax saver | `lock_in` | 0.729 | pass |
+| exit load, flexi cap | `exit_load` | 0.712 | pass |
+| **ticker symbol of the fund** | `other` | **0.708** | **pass** |
+| **recipe for chocolate cake** | `other` | **0.596** | **pass** |
+| **bake sourdough bread at high altitude** | `other` | **0.479** | **pass** |
+
+The last three are unanswerable from this corpus and none of them should pass. The reason is structural, not a mistuned constant: a `FactFamily.OTHER` question has no synonym set, so the coverage condition is vacuous and the raised threshold (`0.35 + 0.10 = 0.45`) sits *below* the off-topic band. Worse, §11.3's contextualisation makes this worse on purpose — it injects `"[HDFC mutual fund] scheme facts — "` in front of an off-topic question, raising the score of a cake recipe by design. So the sweep in this section is not a formality: at every τ in `{0.20 … 0.60}` the false-gate rate on `other`-family questions will be non-zero, and the sweep's own rule (no τ separates them) points at the real conclusion — **term coverage is the load-bearing part of this gate, and τ is a secondary guard.** The coverage condition *does* work where a family exists: an "expense ratio" question passes only if a retrieved chunk literally contains expense-ratio vocabulary, and a high-scoring "direct growth" chunk is rejected for a regular-plan question.
+
+**Corpus vocabulary audit (Phase 6).** Term coverage is only as good as the agreement between `config.retrieval.fact_terms` and the words the corpus actually uses, so every family's synonym list was checked against all 106 chunks:
+
+| Family | Surface forms present in the corpus | Verdict |
+| --- | --- | --- |
+| `expense_ratio` | "expense ratio" (5) | covered |
+| `exit_load` | "exit load" (8) | covered |
+| `min_sip` | **"Min. for SIP" (10)**, "minimum sip" (5) | **was not covered** — `"minimum sip"` never appears in a "Min. for SIP" chunk, so every min-SIP question hard-failed coverage despite the answer being present. `"min. for sip"` added. |
+| `riskometer` | "Very High Risk" (5) | covered via "risk" |
+| `benchmark` | "benchmark" (5), "Nifty" (41), "index" (47) | covered |
+| `lock_in` | **nothing** — 0 of 106 chunks | **unanswerable from this corpus** |
+| `statements` | **nothing** — 0 of 106 chunks | **unanswerable from this corpus** |
+
+The last two are corpus gaps, not configuration gaps, and §12's rule is explicit that the answer is a better source, not a friendlier threshold. The five Groww scheme pages simply do not carry ELSS lock-in terms or tax-statement instructions; the only tax content in the entire corpus is the stamp-duty paragraph. Consequently:
+
+- Every lock-in and statement question *should* fail the gate until a source that carries those facts is added (an HDFC AMC ELSS page or tax-statement page, registered in `data/sources.csv` per C1). `"how do I download the capital gains statement?"` already fails correctly at `top = 0.612`, which is the gate working.
+- The lock-in question currently *passes* on `"tax saver"` alone — a scheme-name synonym doing the work of a fact term. That is the one place where the gate is rubber-stamping a question the corpus cannot answer, and the recommended fix is to delete `"tax saver"` from `fact_terms.lock_in` so the refusal is honest. Left in place here because it trades a demo answer for a refusal, which is a product decision, not a technical one.
+
+Consequence for later phases: generation (Phase 7) must treat the top-1 chunk's `section_type` and matched terms as part of the answer contract, not just its text — a passed gate on an `other`-family question is weak evidence, and the guardrails (Phase 8) inherit that weakness rather than fixing it.
+
+**After the `"min. for sip"` fix, the min-SIP query not only passes but ranks the right chunk first** (`final` 0.974, section `Minimum investments / Exit`) — the same query hard-failed coverage before it, and in Phase 5's raw-cosine check it missed S3 entirely. Vocabulary alignment moved it from "wrong or refused" to correct, which is the §12 argument in miniature: the lever was the corpus's words, not τ.
 
 ### 11.7 5.7 — Context assembly
 
@@ -733,6 +795,8 @@ Additionally, the gate requires **term coverage**: the assembled context must co
 - Budget: `retrieval.context_token_budget = 1800`. Chunks are appended whole until the budget would be exceeded; the **top-1 chunk is never truncated mid-number** (a half number is how invented digits appear).
 - Total context for a typical query: 2–4 chunks, 400–900 tokens.
 
+The budget is accounted in the stored `chunk.token_count` of each chunk, the same measure the chunker recorded, so the accounting needs no tokenizer at query time and cannot drift from the build. The short numbered labels sit outside that count; measured assembled contexts run 616–678 chunk tokens against the 1,800 budget, so the labels' ~20 tokens each are far inside the headroom. A chunk is appended whole or not at all, and a top-1 chunk larger than the whole budget is still included whole — never truncated, never dropped.
+
 ### 11.8 Retrieval cost
 
 | Operation | Typical |
@@ -742,6 +806,10 @@ Additionally, the gate requires **term coverage**: the assembled context must co
 | Chroma query (k=12) | 5–30 ms |
 | Boost + MMR | < 5 ms |
 | **Total retrieval** | **< 100 ms** |
+
+Measured in Phase 6, warm process, three queries end to end: **35–46 ms** total (embed 12–16 ms, dense 11–17 ms, boost + MMR + assembly the rest). The table holds.
+
+Cold, it does not, and the pre-warm in §9 is not optional. The first `retrieve()` in a fresh process measured **11.9 s** — ~8.1 s of which is the encoder load and the remainder the first HNSW index read. That is the same cost `app.py`'s `@st.cache_resource` block exists to absorb (§16), and it is the reason the pre-warm calls `embed()` once rather than only loading the model.
 
 ---
 
