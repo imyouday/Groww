@@ -120,6 +120,7 @@ class LoadingSettings:
     retries: int
     min_extracted_chars: int
     allowed_hosts: tuple[str, ...]
+    drop_class_substrings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -266,7 +267,7 @@ def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
             **{
                 f.name: (
                     _as_str_tuple(raw["loading"][f.name], f"loading.{f.name}")
-                    if f.name == "allowed_hosts"
+                    if f.name in {"allowed_hosts", "drop_class_substrings"}
                     else raw["loading"][f.name]
                 )
                 for f in fields(LoadingSettings)

@@ -16,6 +16,10 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 INFRASTRUCTURE = {"config", "models", "templates", "prompts"}
+# The corpus pipeline runs in one direction: the registry lists the sources, pii scrubs them,
+# and each later stage consumes the artefacts of the previous one. Naming the permitted
+# predecessor per module is stricter than a blanket "any corpus module" rule, which would let
+# chunking import store and hide a real inversion.
 CORPUS = {"registry", "pii", "loading", "chunking", "embedding", "store"}
 POLICY = {"intents", "retrieval", "generation", "guardrails"}
 
@@ -23,7 +27,12 @@ ALLOWED: dict[str, set[str]] = {
     **{name: {"models"} for name in INFRASTRUCTURE if name not in {"models", "templates"}},
     "models": set(),
     "templates": {"models", "config"},
-    **{name: INFRASTRUCTURE for name in CORPUS},
+    "registry": INFRASTRUCTURE,
+    "pii": INFRASTRUCTURE,
+    "loading": INFRASTRUCTURE | {"registry", "pii"},
+    "chunking": INFRASTRUCTURE | {"registry", "pii", "loading"},
+    "embedding": INFRASTRUCTURE | {"registry", "pii", "loading", "chunking"},
+    "store": INFRASTRUCTURE | {"registry", "pii", "loading", "chunking", "embedding"},
     **{name: INFRASTRUCTURE | CORPUS for name in POLICY},
     "pipeline": INFRASTRUCTURE | CORPUS | POLICY,
     "app": {"pipeline", "config", "models", "templates"},

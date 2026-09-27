@@ -331,11 +331,12 @@ class Answer:
 
 ```
 for source in registry.sources():
-    if not source.url.startswith(ALLOWED_HOSTS):        # C1 enforcement
-        raise SourceNotAllowed(source.source_id)
+    if source.source_type is EDUCATION: continue          # E1/E2 are refusal-only, never ingested
+    assert_url_host_allowed(source.url)                   # C1 enforcement, before any socket opens
+    client = new_http_client() if this source needs a fetch else None
 
     cached = data/raw/{source_id}.html|.md
-    if cached.exists() and config.loading.offline_cache_first:
+    if cached.exists() and config.loading.offline_cache_first and not refresh:
         raw = read(cached)                                # snapshot is the source of truth (D3)
     else:
         raw = fetch_with_retry(source.url, timeout=20, retries=3, backoff=2**n)
@@ -346,17 +347,33 @@ for source in registry.sources():
     write(data/processed/{source_id}.txt, text)
     docs.append(LoadedDoc(..., text=text, redaction_hits=n_redacted))
 
-assert_fact_coverage(docs, required=[EXPENSE_RATIO, EXIT_LOAD, MIN_SIP, LOCK_IN, RISKOMETER, BENCHMARK])
+assert_fact_coverage(docs, required=[...])
 return docs
 ```
+
+**No socket opens on a fully cached run.** The HTTP client is constructed *lazily*, on the first
+source that actually needs a fetch, and closed in a `finally`. Eagerly building one client would
+make an offline demo build look like a network dependency and would be defeated by a single
+"no network in tests" tripwire even though zero requests are issued.
+
+**Request pacing** is per *fetch*, not per source: the delay is applied only when the next source
+is going to hit the network, so a cached re-run does not sleep five times for nothing.
 
 ### 7.3 Cleaning rules (`loading.clean`)
 
 1. Parse with `BeautifulSoup(html, "lxml")`.
 2. **Remove by selector**: `script, style, noscript, iframe, svg, header, footer, nav`, elements with `role="navigation"`, cookie/consent banners (`[class*="cookie" i]`, `[id*="consent" i]`), and any node whose text matches the boilerplate stop-list (§8.5).
-3. **Normalise structure**: convert `h1..h6` → `#`…`######` lines, `<li>` → `- `, `<tr>`/`<td>` → `| cell | cell |` (one row per line), `<br>`/block ends → newlines.
-4. **Collapse whitespace**: 3+ newlines → 2; trailing spaces stripped; non-breaking spaces normalised.
-5. **Assert non-empty**: a page yielding < 400 chars is treated as a fetch/parse failure (this is how R1/JS-rendered pages surface loudly) and reported in `BuildReport.warnings`.
+3. **Remove performance widgets**: drop any node whose class attribute contains a substring listed in `config.loading.drop_class_substrings` (`returnCalculator`, `returnStats`, `returnsAndRankings`, …) and any text node matching `NAV: <date>`. This is a *structural* C3 control, not a cosmetic one: the live Groww pages embed a return calculator, historic-return tiles, and a rankings table, so a selector-and-boilerplate filter alone leaves returns and NAV in the corpus. Removing the widget's DOM node cannot leave a stray figure behind, whereas banning the word `return` in `guardrails` would only catch it in the answer.
+4. **Normalise structure**: convert `h1..h6` → `#`…`######` lines, `<li>` → `- `, `<tr>`/`<td>` → `| cell | cell |` (one row per line), `<br>`/block ends → newlines.
+5. **Collapse whitespace**: 3+ newlines → 2; trailing spaces stripped; non-breaking spaces normalised.
+6. **Assert non-empty**: a page yielding < 400 chars is treated as a fetch/parse failure (this is how R1/JS-rendered pages surface loudly) and reported in `BuildReport.warnings`.
+
+> **Status after Phase 3 (2026-09-27):** rule 3 was not in the original spec. The spike snapshots
+> were checked for performance terms and the scheme pages were clean, but the *live* pages carry
+> the return calculator and NAV panel. The loader now removes those nodes at ingest, and
+> `tests/test_loading.py` asserts the processed corpus contains none of
+> `annualised|cagr|xirr|historic return|nav:`.
+
 
 **JS-rendered content (mitigation for R1):** if a registered source is annotated `render: md` in `sources.csv` (e.g. a manually saved rendered snapshot), the loader reads that `.md` and skips HTML parsing beyond light normalisation. This is why `data/raw/` is committed to the repo for a class demo — the corpus becomes deterministic and reviewable.
 
@@ -757,12 +774,34 @@ Regex set, applied to queries and to ingested text. Each pattern is named for lo
 
 | Pattern | Shape |
 | --- | --- |
-| `PAN` | `[A-Z]{5}[0-9]{4}[A-Z]` |
-| `AADHAAR` | 12 digits with optional `X`/`x`, in a labelled context |
-| `ACCOUNT_NO` | 8–18 consecutive digits, or labelled (`folio`, `account no`) |
-| `OTP` | 4–6 digit code near `otp\|code\|verification` |
+| `PAN` | `[A-Z]{5}[0-9]{4}[A-Z]` (case-sensitive: `Aaaaa1234A` is not a PAN) |
+| `AADHAAR` | 12 digits with optional `X`/`x`, in a labelled context (`aadhaar`, `aadhar`, `uidai`) |
+| `ACCOUNT_NO` | 8–18 consecutive digits, or labelled (`account`, `acct`, `folio`, `client id`) |
+| `OTP` | 4–6 digit code near `otp\|code\|verification`; **always** label-gated |
 | `EMAIL` | RFC-ish local@domain.tld |
-| `PHONE_IN` | 10 digits with optional `+91` (after stripping separators) |
+| `PHONE_IN` | 10 digits with optional `+91` (after stripping separators), or an Indian landline `0XX-XXXXXXX` |
+
+Only the `secret` group of a match is claimed, so the label that made a bare number detectable
+("my OTP is 482913") survives redaction and the sentence still reads like a sentence.
+
+**Claim order** (`pii.DETECTION_ORDER`, first pattern to reach a span wins):
+
+1. `PAN` — the only pattern that must not be eaten by the 8–18 digit account rule.
+2. `AADHAAR` — a 12-digit Aadhaar is also 12 digits, so the specific form must go first.
+3. `OTP` — a labelled 6-digit code is below the account rule's floor but is still PII; a *bare*
+   4–6 digit run is not claimed, because on a fund page it is a quantile or a rank.
+4. `EMAIL` — independent of the numeric rules.
+5. `PHONE_IN` — **before** `ACCOUNT_NO`, because a bare 10-digit run is far more often an Indian
+   mobile than an account number, and the account rule's 8–18 digit range would otherwise claim
+   it and mislabel what was removed. Landlines are claimed here for the same reason.
+6. `ACCOUNT_NO` — the widest numeric rule goes last, so it only claims spans nothing else wanted.
+
+> **Status after Phase 3 (2026-09-27):** rule 5 was originally specified as `ACCOUNT_NO` before
+> `PHONE_IN`. The corpus contains a real 10-digit contact number, and the as-specified order
+> redacted it as `[REDACTED:ACCOUNT_NO]` — safe, but factually the wrong kind, which would
+> misreport a corpus statistic. The order above is the corrected one and `DETECTION_ORDER` is the
+> single source of truth for it.
+
 
 ### 14.2 Redaction
 

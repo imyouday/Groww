@@ -70,6 +70,22 @@ loading:
   # real AMC domain but returns HTTP 403 to a scripted client, so it is not fetchable and is
   # therefore absent here (docs/corpus_matrix.md §3).
   allowed_hosts: [groww.in, amfiindia.com, sebi.gov.in]
+  # Blocks that carry performance figures are dropped at ingest rather than merely refused at
+  # query time. PRD constraint C3 says the system never returns, computes, or compares
+  # returns/NAV/performance; a retrievable return table would be a chunk the retriever can
+  # surface, and no prompt or post-filter makes that safe. Every source page embeds a
+  # "Return calculator" widget whose historical-return table is exactly that risk.
+  # Matched case-insensitively as a substring of any class attribute, so the hashed CSS-module
+  # suffixes Groww emits (returnStats_tickerContainer___25d1) are caught by their stable prefix.
+  # Verified against all five pages: these are the only classes that carry a return, NAV, or
+  # ranking figure.
+  drop_class_substrings:
+    - returnCalculator
+    - returnStats
+    - returnsAndRankings
+    - historicReturn
+    - performanceChart
+    - navHistory
 
 guardrails:
   max_sentences: 3
