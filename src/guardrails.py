@@ -69,6 +69,7 @@ _ATTRIBUTION_RE = re.compile(
     re.IGNORECASE,
 )
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
+_HAS_DIGIT_RE = re.compile(r"\d")
 _VOCABULARY_MIN_LEN = 4
 
 
@@ -131,18 +132,22 @@ def V3_on_topic(
     context: AssembledContext | str | None,
     settings: Settings | None = None,
 ) -> bool:
-    """Report whether the draft is long enough and shares vocabulary with the retrieved text (V3)."""
+    """Report whether the draft shares the retrieved text's vocabulary (V3).
+
+    The five-word floor of architecture.md §13.2 is a proxy for "not a stub", and prose answers
+    clear it easily. A fact that lives in a fee table does not: the corpus holds "Expense ratio" and
+    "1.03%" on two lines, the composer pairs them, and the honest answer is the three words
+    "Expense ratio 1.03%". A short draft therefore passes when it is term-bearing *and* carries a
+    value, which is what a lifted table fact looks like, and fails when it is a contentless stub.
+    """
     cfg = settings or load_settings()
-    if len(_WORD_RE.findall(text)) < MIN_ON_TOPIC_WORDS:
-        return False
     words = {word.lower() for word in _WORD_RE.findall(text)}
-    terms = {
-        term.lower()
-        for term in cfg.retrieval.fact_terms.get(_family_of(context), ())
-    }
-    if words & terms:
+    terms = {term.lower() for term in cfg.retrieval.fact_terms.get(_family_of(context), ())}
+    if not (words & terms) and not (words & _context_vocabulary(context)):
+        return False
+    if len(words) >= MIN_ON_TOPIC_WORDS:
         return True
-    return bool(words & _context_vocabulary(context))
+    return _HAS_DIGIT_RE.search(text) is not None
 
 
 def _family_of(context: AssembledContext | str | None) -> str:
@@ -175,14 +180,36 @@ def V4_numeric_grounding(
     return (not ungrounded, ungrounded)
 
 
-def V5_banned_terms(text: str, banned_terms: tuple[str, ...] | list[str]) -> list[str]:
-    """Return the advice or performance terms the text uses (V5, constraints C3 and D2)."""
+def V5_banned_terms(
+    text: str,
+    banned_terms: tuple[str, ...] | list[str],
+    context: AssembledContext | str | None = None,
+) -> list[str]:
+    """Return the advice or performance terms the text uses (V5, constraints C3 and D2).
+
+    A hit inside a sentence the corpus itself contains is not advice; it is the source page's own
+    wording, reproduced under a citation the user can open. That distinction is not cosmetic here.
+    The corpus states "NIFTY 100 Total Return Index" as the benchmark name and "returns are taxed at
+    20%" as a tax rule, and both are facts this assistant is supposed to be able to state. So when
+    a context is supplied, a banned term is suppressed if the sentence carrying it appears verbatim in
+    the assembled context. An invented sentence never does, which leaves the check fully in force
+    against the failure it exists for: model-authored advice.
+    """
+    haystack = _collapse(_context_text(context))
     hits: list[str] = []
     for term in banned_terms:
         if not term:
             continue
-        if re.search(rf"(?<!\w){re.escape(term.lower())}(?!\w)", text.lower()):
-            hits.append(term)
+        pattern = rf"(?<!\w){re.escape(term.lower())}(?!\w)"
+        if re.search(pattern, text.lower()) is None:
+            continue
+        if haystack and all(
+            _collapse(sentence) in haystack
+            for sentence in split_sentences(text)
+            if re.search(pattern, sentence.lower())
+        ):
+            continue
+        hits.append(term)
     return hits
 
 
@@ -206,7 +233,7 @@ def validation_report(
         and V3_on_topic(draft.text, context, cfg),
         "v4_numeric": grounded if cfg.guardrails.enforce_numeric_grounding else True,
         "v4_ungrounded": ungrounded,
-        "v5_banned": V5_banned_terms(draft.text, cfg.guardrails.banned_terms),
+        "v5_banned": V5_banned_terms(draft.text, cfg.guardrails.banned_terms, context),
         "v6_no_urls": V6_no_urls(draft.text),
     }
 

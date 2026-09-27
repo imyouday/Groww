@@ -32,7 +32,16 @@ from src import chunking, embedding, guardrails, loading, store, templates
 from src.config import Settings, config_hash, load_llm_env, load_settings
 from src.generation import ExtractiveGenerator, resolve_generator
 from src.intents import classify, has_pii
-from src.models import Answer, BuildReport, ChunkRecord, GateResult, Intent, PipelineError
+from src.models import (
+    Answer,
+    BuildReport,
+    ChunkRecord,
+    DraftAnswer,
+    GateResult,
+    GenerationError,
+    Intent,
+    PipelineError,
+)
 from src.registry import load_registry
 from src.retrieval import NON_FACTUAL, retrieve_with_debug
 
@@ -425,7 +434,7 @@ def _answer(
         )
 
     context, retrieval_trace = retrieve_with_debug(query, resolved)
-    timings: dict[str, float] = {
+    timings: dict[str, Any] = {
         "retrieval_ms": round((time.perf_counter() - started) * 1000, 2)
     }
     if context is None:
@@ -446,52 +455,68 @@ def _answer(
 
     generator, _provider_name = resolve_generator(resolved)
     clock = time.perf_counter()
-    draft = generator.generate(context, query, classification.intent)
+    draft: DraftAnswer | None = None
+    try:
+        draft = generator.generate(context, query, classification.intent)
+    except GenerationError as exc:
+        timings["generator_error"] = type(exc).__name__
     timings["generation_ms"] = round((time.perf_counter() - clock) * 1000, 2)
-    report = guardrails.validation_report(draft, context, resolved)
-    verdict = guardrails.first_failure(report)
+
+    report: dict[str, Any] = {}
+    first_verdict = "generator_failed"
+    if draft is not None:
+        report = guardrails.validation_report(draft, context, resolved)
+        first_verdict = guardrails.first_failure(report)
+        if first_verdict.startswith("v1_"):
+            intent = Intent.ADVICE_REQUEST if first_verdict == "v1_refusal" else Intent.FACTUAL_FACT
+            routed = guardrails.route(
+                intent, None, context, registry, resolved, classification.scheme_id
+            )
+            return replace(
+                routed,
+                trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+            )
     timings["guardrails_ms"] = round((time.perf_counter() - clock) * 1000, 2)
 
-    if verdict.startswith("v1_"):
-        intent = Intent.ADVICE_REQUEST if verdict == "v1_refusal" else Intent.FACTUAL_FACT
-        routed = guardrails.route(intent, None, context, registry, resolved)
-        return replace(
-            routed,
-            trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
-        )
-
-    if verdict != "passed":
+    shipped = draft
+    shipped_report = report
+    if first_verdict != "passed":
         clock = time.perf_counter()
         fallback = ExtractiveGenerator(resolved).generate(
             context, query, classification.intent
         )
         timings["extractive_retry_ms"] = round((time.perf_counter() - clock) * 1000, 2)
         fallback_report = guardrails.validation_report(fallback, context, resolved)
-        fallback_verdict = guardrails.first_failure(fallback_report)
-        if fallback.text and fallback_verdict == "passed":
-            draft, report, verdict = fallback, fallback_report, verdict
+        if fallback.text and guardrails.first_failure(fallback_report) == "passed":
+            shipped, shipped_report = fallback, fallback_report
 
-    if verdict != "passed" or not draft.text:
-        routed = guardrails.route(Intent.FACTUAL_FACT, None, context, registry, resolved)
+    if (
+        shipped is None
+        or not shipped.text
+        or guardrails.first_failure(shipped_report) != "passed"
+    ):
+        routed = guardrails.route(
+            Intent.FACTUAL_FACT, None, context, registry, resolved, classification.scheme_id
+        )
         return replace(
             routed,
             trace={
                 **retrieval_trace,
                 **routed.trace,
-                "guardrail": verdict,
-                "validators": report,
+                "guardrail": first_verdict,
+                "validators": shipped_report,
                 "timings_ms": timings,
             },
         )
 
     answer_value = guardrails.build_answer(
-        draft,
+        shipped,
         context,
         classification.intent,
         registry,
         resolved,
-        guardrail=verdict,
-        report=report,
+        guardrail=first_verdict,
+        report=shipped_report,
         timings_ms=timings,
     )
     return replace(answer_value, trace={**retrieval_trace, **answer_value.trace})

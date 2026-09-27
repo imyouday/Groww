@@ -236,6 +236,20 @@ def test_ensure_built_passes_once_there_are_chunks(settings, built) -> None:
     store.ensure_built(settings)
 
 
+def test_the_query_path_reuses_one_handle(settings, built) -> None:
+    """Opening a client costs ~20ms, so the read path must not do it twice per question."""
+    assert store.open_collection(settings) is store.open_collection(settings)
+
+
+def test_a_reset_is_never_served_from_the_cached_handle(settings, built) -> None:
+    """The cache is only safe because `reset` invalidates it; without that, a rebuild goes stale."""
+    assert store.open_collection(settings).count() == 3
+    store.reset(settings)
+    assert store.open_collection(settings).count() == 0
+    with pytest.raises(IndexNotBuiltError):
+        store.ensure_built(settings)
+
+
 def test_telemetry_is_replaced_rather_than_merely_flagged_off() -> None:
     """`anonymized_telemetry=False` still constructs the Posthog client on 0.5.23 and logs an error."""
     assert issubclass(store.NoTelemetry, store.Component)

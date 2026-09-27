@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -63,17 +64,22 @@ class NoTelemetry(Component):
         return None
 
 
-def connect(settings: Settings | None = None) -> chromadb.Client:
-    """Return the persistent client, with telemetry disabled (NFR-7)."""
-    resolved = settings or load_settings()
-    resolved.paths.resolve("chroma_dir").mkdir(parents=True, exist_ok=True)
+def _client_for(path: str) -> chromadb.Client:
+    """Return a persistent client for one directory, with telemetry disabled (NFR-7)."""
+    Path(path).mkdir(parents=True, exist_ok=True)
     return chromadb.PersistentClient(
-        path=str(resolved.paths.resolve("chroma_dir")),
+        path=path,
         settings=chromadb.config.Settings(
             anonymized_telemetry=False,
             chroma_product_telemetry_impl=f"{NoTelemetry.__module__}.{NoTelemetry.__qualname__}",
         ),
     )
+
+
+def connect(settings: Settings | None = None) -> chromadb.Client:
+    """Return the persistent client, with telemetry disabled (NFR-7)."""
+    resolved = settings or load_settings()
+    return _client_for(str(resolved.paths.resolve("chroma_dir")))
 
 
 def chroma_version() -> tuple[int, ...]:
@@ -115,16 +121,15 @@ def collection_configuration(space: str) -> Any:
     )
 
 
-def get_collection(settings: Settings | None = None) -> chromadb.Collection:
-    """Return the configured collection, creating it with a cosine space if it is absent."""
-    resolved = settings or load_settings()
-    client = connect(resolved)
-    name = resolved.chroma.collection_name
-    metadata = {"description": resolved.chroma.description}
-    configuration = collection_configuration(resolved.chroma.space)
+def _collection_for(
+    client: chromadb.Client, name: str, space: str, description: str
+) -> chromadb.Collection:
+    """Return a collection for explicit configuration values, creating it if it is absent."""
+    metadata = {"description": description}
+    configuration = collection_configuration(space)
     if configuration is None:
         return client.get_or_create_collection(
-            name=name, metadata=metadata | {"hnsw:space": resolved.chroma.space}
+            name=name, metadata=metadata | {"hnsw:space": space}
         )
     try:
         return client.get_or_create_collection(
@@ -135,6 +140,43 @@ def get_collection(settings: Settings | None = None) -> chromadb.Collection:
             f"chromadb {chromadb.__version__} rejected the collection configuration "
             f"({error}); expected CollectionConfiguration or a plain hnsw mapping"
         ) from error
+
+
+def get_collection(settings: Settings | None = None) -> chromadb.Collection:
+    """Return the configured collection, creating it with a cosine space if it is absent."""
+    resolved = settings or load_settings()
+    return _collection_for(
+        connect(resolved),
+        resolved.chroma.collection_name,
+        resolved.chroma.space,
+        resolved.chroma.description,
+    )
+
+
+@lru_cache(maxsize=8)
+def _cached_collection(
+    path: str, name: str, space: str, description: str
+) -> chromadb.Collection:
+    """Return the collection for explicit configuration values, memoised on those four."""
+    return _collection_for(_client_for(path), name, space, description)
+
+
+def open_collection(settings: Settings | None = None) -> chromadb.Collection:
+    """Return the collection for the query path, reusing one client and handle across questions.
+
+    Building a `PersistentClient` and resolving the collection costs roughly 20ms, and the query
+    path did it twice per question, so more than half of the non-encoder time of a turn went into
+    opening a database that was already open. The index is immutable while it is being served, so
+    the handle can be reused; `reset` clears the cache, so a rebuild is never answered from a handle
+    that still points at a deleted collection.
+    """
+    resolved = settings or load_settings()
+    return _cached_collection(
+        str(resolved.paths.resolve("chroma_dir")),
+        resolved.chroma.collection_name,
+        resolved.chroma.space,
+        resolved.chroma.description,
+    )
 
 
 def metadata_for(chunk: ChunkRecord) -> dict[str, str | int]:
@@ -247,7 +289,7 @@ def query(
     of a candidate is recomputed, which is what makes the printed percentage trustworthy.
     """
     resolved = settings or load_settings()
-    collection = get_collection(resolved)
+    collection = open_collection(resolved)
     total = collection.count()
     if not total:
         raise IndexNotBuiltError(
@@ -331,13 +373,14 @@ def reset(settings: Settings | None = None) -> None:
     existing = [found.name for found in client.list_collections()]
     if name in existing:
         client.delete_collection(name)
+    _cached_collection.cache_clear()
     get_collection(resolved)
 
 
 def ensure_built(settings: Settings | None = None) -> None:
     """Raise `IndexNotBuiltError` unless the collection holds at least one chunk."""
     resolved = settings or load_settings()
-    if get_collection(resolved).count() == 0:
+    if open_collection(resolved).count() == 0:
         raise IndexNotBuiltError(
             "no chunks are indexed; run `python -m src.pipeline build` before asking a question"
         )

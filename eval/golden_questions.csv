@@ -1,0 +1,25 @@
+id,question,expected_scheme,fact_family,expected_url,must_include
+G01,What is the expense ratio of the HDFC Large Cap fund?,HDFC Large Cap Fund - Direct Growth,expense_ratio,https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth,1.03%
+G02,What is the expense ratio of the HDFC Flexi Cap fund?,HDFC Equity Fund (Flexi Cap) - Direct Growth,expense_ratio,https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth,0.77%
+G03,What is the expense ratio of the HDFC ELSS tax saver fund?,HDFC ELSS Tax Saver Fund - Direct Plan Growth,expense_ratio,https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-plan-growth,1.21%
+G04,What is the expense ratio of the HDFC Small Cap fund?,HDFC Small Cap Fund - Direct Growth,expense_ratio,https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth,0.78%
+G05,What is the expense ratio of the HDFC Balanced Advantage fund?,HDFC Balanced Advantage Fund - Direct Growth,expense_ratio,https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth,0.78%
+G06,What is the exit load on the HDFC Large Cap fund?,HDFC Large Cap Fund - Direct Growth,exit_load,https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth,1%
+G07,What is the exit load on the HDFC Flexi Cap fund?,HDFC Equity Fund (Flexi Cap) - Direct Growth,exit_load,https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth,1%
+G08,What is the exit load on the HDFC Small Cap fund?,HDFC Small Cap Fund - Direct Growth,exit_load,https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth,1%
+G09,What is the exit load on the HDFC Balanced Advantage fund?,HDFC Balanced Advantage Fund - Direct Growth,exit_load,https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth,1%
+G10,What is the minimum SIP amount for the HDFC Large Cap fund?,HDFC Large Cap Fund - Direct Growth,min_sip,https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth,₹100
+G11,What is the minimum SIP amount for the HDFC Flexi Cap fund?,HDFC Equity Fund (Flexi Cap) - Direct Growth,min_sip,https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth,₹100
+G12,What is the minimum SIP amount for the HDFC ELSS tax saver fund?,HDFC ELSS Tax Saver Fund - Direct Plan Growth,min_sip,https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-plan-growth,₹500
+G13,What is the minimum SIP amount for the HDFC Small Cap fund?,HDFC Small Cap Fund - Direct Growth,min_sip,https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth,₹100
+G14,What is the minimum SIP amount for the HDFC Balanced Advantage fund?,HDFC Balanced Advantage Fund - Direct Growth,min_sip,https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth,₹100
+G15,What is the risk rating of the HDFC Large Cap fund?,HDFC Large Cap Fund - Direct Growth,risk_rating,https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth,Very High
+G16,What is the risk rating of the HDFC Flexi Cap fund?,HDFC Equity Fund (Flexi Cap) - Direct Growth,risk_rating,https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth,Very High
+G17,What is the risk rating of the HDFC ELSS tax saver fund?,HDFC ELSS Tax Saver Fund - Direct Plan Growth,risk_rating,https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-plan-growth,Very High
+G18,What is the risk rating of the HDFC Small Cap fund?,HDFC Small Cap Fund - Direct Growth,risk_rating,https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth,Very High
+G19,What is the risk rating of the HDFC Balanced Advantage fund?,HDFC Balanced Advantage Fund - Direct Growth,risk_rating,https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth,Very High
+G20,What is the benchmark of the HDFC Large Cap fund?,HDFC Large Cap Fund - Direct Growth,benchmark,https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth,NIFTY 100
+G21,What is the benchmark of the HDFC Flexi Cap fund?,HDFC Equity Fund (Flexi Cap) - Direct Growth,benchmark,https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth,NIFTY 500
+G22,What is the benchmark of the HDFC ELSS tax saver fund?,HDFC ELSS Tax Saver Fund - Direct Plan Growth,benchmark,https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-plan-growth,NIFTY 500
+G23,What is the benchmark of the HDFC Small Cap fund?,HDFC Small Cap Fund - Direct Growth,benchmark,https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth,BSE 250 SmallCap
+G24,What is the benchmark of the HDFC Balanced Advantage fund?,HDFC Balanced Advantage Fund - Direct Growth,benchmark,https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth,NIFTY 50 Hybrid

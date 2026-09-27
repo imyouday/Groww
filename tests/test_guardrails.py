@@ -128,6 +128,13 @@ class TestV3OnTopic:
         text = "The weather in Mumbai is pleasant this week and the trains are running."
         assert V3_on_topic(text, make_context()) is False
 
+    def test_a_lifted_table_fact_passes_even_though_it_is_three_words(self) -> None:
+        """The corpus holds "Expense ratio" and "1.03%" on two lines, so the answer is three words."""
+        assert V3_on_topic("Expense ratio 1.03%", make_context()) is True
+
+    def test_a_value_free_stub_is_still_rejected(self) -> None:
+        assert V3_on_topic("Expense ratio", make_context()) is False
+
 
 class TestV4NumericGrounding:
     def test_a_grounded_percentage_passes(self) -> None:
@@ -177,6 +184,25 @@ class TestV5BannedTerms:
     def test_matching_is_on_word_boundaries(self) -> None:
         assert V5_banned_terms("The scheme holds 50 stocks.", ("hold",)) == []
         assert V5_banned_terms("Hold this fund.", ("hold",)) == ["hold"]
+
+    def test_a_banned_word_inside_a_verbatim_corpus_sentence_is_not_a_hit(self) -> None:
+        """"NIFTY 100 Total Return Index" is the benchmark's name, not a performance claim."""
+        context = make_context("Fund benchmark\nNIFTY 100 Total Return Index")
+        assert V5_banned_terms("Fund benchmark NIFTY 100 Total Return Index", ("return",), context) == []
+
+    def test_a_tax_rule_from_the_corpus_is_not_a_hit_either(self) -> None:
+        context = make_context("If you redeem within one year, returns are taxed at 20%.")
+        text = "If you redeem within one year, returns are taxed at 20%."
+        assert V5_banned_terms(text, ("returns",), context) == []
+
+    def test_invented_advice_about_the_same_number_is_still_a_hit(self) -> None:
+        context = make_context("If you redeem within one year, returns are taxed at 20%.")
+        text = "You should redeem within one year, because returns are taxed at 20%."
+        assert V5_banned_terms(text, ("should", "returns"), context) == ["should", "returns"]
+
+    def test_a_missing_context_keeps_the_check_strict(self) -> None:
+        context = make_context("Fund benchmark\nNIFTY 100 Total Return Index")
+        assert V5_banned_terms("Fund benchmark NIFTY 100 Total Return Index", ("return",)) == ["return"]
 
 
 class TestV6NoUrls:
