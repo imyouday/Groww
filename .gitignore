@@ -16,3 +16,8 @@ __pycache__/
 data/chroma/
 data/models/
 data/chunks.jsonl
+
+# Phase 0 spike scratch: 3.3 MB of throwaway HTML/text for candidate URLs, most of them rejected.
+# docs/corpus_matrix.md records the findings; Phase 3 re-fetches the 5 accepted sources into
+# data/raw/ deterministically, so committing these would only duplicate the corpus.
+data/raw/spike/

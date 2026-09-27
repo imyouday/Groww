@@ -66,7 +66,10 @@ loading:
   timeout_s: 20
   retries: 3
   min_extracted_chars: 400
-  allowed_hosts: [groww.in, hdfcmutualfund.com, amfiindia.com, sebi.gov.in]
+  # Phase 0 spike: hdfcmutualfund.com is not HDFC's domain and is removed. hdfcfund.com is the
+  # real AMC domain but returns HTTP 403 to a scripted client, so it is not fetchable and is
+  # therefore absent here (docs/corpus_matrix.md §3).
+  allowed_hosts: [groww.in, amfiindia.com, sebi.gov.in]
 
 guardrails:
   max_sentences: 3
@@ -75,12 +78,22 @@ guardrails:
 
 registry:
   known_other_amcs: [parag, axis, icici, sbi, kotak, tata nippon, nippon, quant, mahindra, icici prudential]
-  # TODO(Phase 2): fill these with the official public pages actually used. They are refusal/
-  # redirect links, so a wrong or invented URL is a visible defect. They are validated as
-  # strings here and asserted non-empty by registry.load_registry() once Phase 2 lands.
-  education_url: ""                   # SEBI / AMFI investor-education page
-  help_url: ""                        # official support channel
-  factsheet_index_url: ""             # AMC factsheets index
+  # Ordered longest-first alias match (architecture.md §11.3). Longest-first is mandatory: with a
+  # shortest-first pass "tax saver" can be shadowed by a shorter alias and mis-resolve a query.
+  scheme_aliases:
+    S1: ["large cap", "largecap", "hdfc large cap", "large cap fund"]
+    S2: ["flexi cap", "flexicap", "equity fund", "hdfc equity fund"]
+    S3: ["elss", "tax saver", "tax saving", "taxsaver", "elss tax saver", "80c"]
+    S4: ["small cap", "smallcap", "hdfc small cap", "small cap fund"]
+    S5: ["balanced advantage", "balancedadvantage", "balanced advantage fund"]
+  # Refusal/redirect links. They are rendered to the user, never ingested or chunked, so they do
+  # not need to be fetchable. Every URL below was checked against docs/corpus_matrix.md §3.
+  education_url: "https://www.amfiindia.com/"   # verified HTTP 200
+  help_url: "https://groww.in/help"            # verified HTTP 200
+  # UNRESOLVED: no official factsheet index is fetchable (HDFC's own is 403, and the
+  # groww.in/mutual-funds/<scheme>/factsheet path 404s). Left empty on purpose so the system
+  # degrades to the scheme page instead of shipping an invented URL. Resolve before Phase 8.
+  factsheet_index_url: ""
 
 # Single source of truth for every user-visible string (architecture.md §20 closing note).
 # src/templates.py exposes these as module constants; the UI, the refusal paths and the README

@@ -360,6 +360,8 @@ return docs
 
 **JS-rendered content (mitigation for R1):** if a registered source is annotated `render: md` in `sources.csv` (e.g. a manually saved rendered snapshot), the loader reads that `.md` and skips HTML parsing beyond light normalisation. This is why `data/raw/` is committed to the repo for a class demo — the corpus becomes deterministic and reviewable.
 
+> **Status after spike S1 (2026-09-27):** the `render` column is **not** in the shipped `sources.csv`. The spike proved all five pages are server-rendered and yield 17k–46k chars, so no source needs the `.md` path. The loader still honours a `render` value if one is ever added — the branch costs one `if` and is what makes a future JS-only source survivable without a redesign.
+
 ### 7.4 Failure behaviour
 
 | Condition | Behaviour |
@@ -726,7 +728,7 @@ V4 is the highest-value check and the strongest argument for the architecture: i
 | `Intent` / gate result | `Answer.kind` | Template + link |
 | --- | --- | --- |
 | `ADVICE_REQUEST` | `refusal` | Facts-only notice + `education_url` (registry) |
-| `PERFORMANCE_REQUEST` | `performance_redirect` | "returns not covered" + `factsheet_url` for the resolved scheme (or the AMC factsheet index if unresolved) |
+| `PERFORMANCE_REQUEST` | `performance_redirect` | "returns not covered" + `factsheet_url` for the resolved scheme. **Spike caveat:** no official factsheet index is fetchable (HDFC's host 403s), so `factsheet_index_url` is empty and this falls back to the resolved scheme's own page. Never emit an empty link. |
 | `PII_REQUEST` | `pii_refusal` | "don't share identifiers" + official support `help_url` |
 | `OUT_OF_CORPUS` | `out_of_corpus` | Corpus-scope statement + nearest in-scope scheme page link |
 | `SMALLTALK` | `smalltalk` | Capability summary + 3 example questions |
@@ -1017,6 +1019,33 @@ registry:
 | **S4 — Streamlit cold start** | Does the app hit the < 10 s cold-start budget on the demo laptop? | 30 min | Measured and recorded in README. |
 
 S1 and S2 gate M1/M2. **Do not build the pipeline before S1 returns** — the corpus is the only assumption that can invalidate the chunking decision.
+
+### 21.1 S1 result — corpus reality check (run 2026-09-27)
+
+Full evidence in `docs/corpus_matrix.md`. Outcome: **partially met**, and the fallback the success
+criterion calls for was *not* available, so the source set stayed as briefed with two corrections.
+
+| Question | Result |
+| --- | --- |
+| Are the 5 pages fetchable and server-rendered? | 4 of 5 yes. S3's briefed URL (`…-direct-growth`) is **HTTP 404**; the live slug is `…-direct-plan-growth`. All 5 yield 17k–46k chars of text, so no headless-render path is needed. |
+| Are expense ratio, exit load, min SIP, min lump, benchmark retrievable? | **Yes, on all 5** pages. |
+| Is the ELSS lock-in retrievable? | **No.** "lock-in" never appears; matches were a related-funds nav list. |
+| Is the riskometer retrievable? | **No.** Pages say "rated Very High risk"; the word "riskometer" is absent. |
+| Are statement-download steps retrievable? | **No.** Official channels (CAMS, `investor.hdfcfund.com`) are login-gated, a stated non-goal. |
+
+The success criterion's remedy — "switch to HDFC AMC's own scheme/fee pages" — was attempted and
+**failed**: `hdfcfund.com` returns **HTTP 403** to a scripted client on both the scheme page and
+the statutory riskometer page, and `sebi.gov.in` resets the connection from this environment
+(`investor.gov.in` does not resolve). Third-party publishers that *do* serve these facts were
+rejected under constraint C1.
+
+**Consequence for the design:** the answerable set is 5 fact families, not 7. `RISKOMETER`,
+`LOCK_IN` and `STATEMENTS` remain in `retrieval.fact_terms` so the system recognises the question
+and returns the "not in my sources" path with a link, instead of hallucinating. `factsheet_index_url`
+stays empty because no official factsheet index is fetchable; the performance redirect degrades to
+the scheme page rather than shipping an invented URL. The `renderer` field described in §7 is
+**dropped** from `sources.csv` — it exists only for JS-rendered pages, and the spike proved these
+are not.
 
 ---
 

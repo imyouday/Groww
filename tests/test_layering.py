@@ -2,7 +2,8 @@
 
 A stage may only import from the layers below it. The online stages in particular must stay
 independent of the generator, so the grounding-gate decision is provable without a model
-(architecture.md §11.6, driver D1).
+(architecture.md §11.6, driver D1). ALLOWED is the whole rule set; the tests below only assert
+its consequences that are not already covered by the per-module parametrisation.
 """
 
 from __future__ import annotations
@@ -19,8 +20,9 @@ CORPUS = {"registry", "pii", "loading", "chunking", "embedding", "store"}
 POLICY = {"intents", "retrieval", "generation", "guardrails"}
 
 ALLOWED: dict[str, set[str]] = {
-    **{name: {"models"} for name in INFRASTRUCTURE if name != "models"},
+    **{name: {"models"} for name in INFRASTRUCTURE if name not in {"models", "templates"}},
     "models": set(),
+    "templates": {"models", "config"},
     **{name: INFRASTRUCTURE for name in CORPUS},
     **{name: INFRASTRUCTURE | CORPUS for name in POLICY},
     "pipeline": INFRASTRUCTURE | CORPUS | POLICY,
@@ -86,12 +88,20 @@ def test_models_is_fully_self_contained() -> None:
     assert not imported, f"src/models.py imports {sorted(imported)}; it must depend on nothing"
 
 
-def test_infrastructure_depends_only_on_models() -> None:
-    for module in sorted(INFRASTRUCTURE - {"models"}):
-        imported = _local_imports(_module_path(module))
-        assert imported <= {"models"}, (
-            f"src/{module}.py imports {sorted(imported)}; infrastructure may depend only on models"
-        )
+def test_prompts_depends_only_on_models() -> None:
+    imported = _local_imports(_module_path("prompts"))
+    assert imported <= {"models"}, (
+        f"src/prompts.py imports {sorted(imported)}; the prompt contract may depend only on models"
+    )
+
+
+def test_templates_reads_copy_from_config_not_the_other_way_round() -> None:
+    imported = _local_imports(_module_path("templates"))
+    assert imported <= {"models", "config"}, (
+        f"src/templates.py imports {sorted(imported)}; copy is configuration, so templates reads "
+        "config.yaml, and config must never import templates"
+    )
+    assert "templates" not in _local_imports(_module_path("config"))
 
 
 def test_config_module_is_self_contained() -> None:

@@ -84,11 +84,15 @@ AMC: **HDFC Asset Management Company**. Five schemes (satisfies the "3–5 schem
 | --- | --- | --- | --- |
 | S1 | Large Cap | HDFC Large Cap Fund — Direct Growth | `https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth` |
 | S2 | Flexi Cap | HDFC Equity Fund — Direct Growth | `https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth` |
-| S3 | ELSS | HDFC ELSS Tax Saver Fund — Direct Plan — Growth | `https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-growth` |
+| S3 | ELSS | HDFC ELSS Tax Saver Fund — Direct Plan — Growth | `https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-plan-growth` |
 | S4 | Small Cap | HDFC Small Cap Fund — Direct Growth | `https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth` |
 | S5 | Balanced Advantage (Hybrid) | HDFC Balanced Advantage Fund — Direct Growth | `https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth` |
 
 Also permitted as supporting sources (same public-only rule): official HDFC AMC scheme pages/factsheets, AMFI scheme documents, SEBI investor-education pages. Any added page must be registered in `data/sources.csv` and listed in the final source list.
+
+> **Phase 0 correction (2026-09-27).** The S3 URL in the brief ended `-direct-growth` and returns
+> **HTTP 404**; the live slug is `-direct-plan-growth` (see `docs/corpus_matrix.md` §1). The
+> corrected URL is what the registry uses.
 
 ### 5.2 In-scope fact families (the answerable question set)
 
@@ -99,6 +103,14 @@ Also permitted as supporting sources (same public-only rule): official HDFC AMC 
 5. Riskometer category and benchmark
 6. Minimum investment horizon, and scheme objective/category in one line
 7. How to download statements and tax documents (capital-gains statement, account statement, tax report)
+
+> **Phase 0 finding (2026-09-27, `docs/corpus_matrix.md` §2).** Families 1–3 and the benchmark
+> half of 5 are present as retrievable text on all five pages. Families 4, the riskometer half of
+> 5, and 7 are **not obtainable from any fetchable official page**: HDFC's own domain returns
+> HTTP 403 to a scripted client, and the official statement channels (CAMS, `investor.hdfcfund.com`)
+> are login-gated, which is a stated non-goal. The system still recognises those question types
+> and answers "not in my sources" with a link rather than guessing. They are not in the demo's
+> answerable set; see `docs/corpus_matrix.md` §3 for the rejected candidates.
 
 ### 5.3 Out-of-scope query classes (must be refused or redirected)
 

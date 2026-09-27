@@ -132,6 +132,7 @@ class GuardrailsSettings:
 @dataclass(frozen=True)
 class RegistrySettings:
     known_other_amcs: tuple[str, ...]
+    scheme_aliases: dict[str, tuple[str, ...]]
     education_url: str
     help_url: str
     factsheet_index_url: str
@@ -195,6 +196,20 @@ def _as_str_tuple(value: Any, key_path: str) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
+def _as_alias_map(value: Any) -> dict[str, tuple[str, ...]]:
+    """Coerce registry.scheme_aliases into scheme_id -> ordered alias tuple."""
+    key_path = "registry.scheme_aliases"
+    if not isinstance(value, Mapping):
+        raise PipelineError(f"config key {key_path}: expected a mapping of scheme_id to aliases")
+    aliases: dict[str, tuple[str, ...]] = {}
+    for scheme_id, terms in value.items():
+        lowered = _as_str_tuple(terms, f"{key_path}.{scheme_id}")
+        if any(not term.strip() for term in lowered):
+            raise PipelineError(f"config key {key_path}.{scheme_id}: aliases must not be blank")
+        aliases[str(scheme_id)] = tuple(term.strip().lower() for term in lowered)
+    return aliases
+
+
 def _required_keys(raw: Mapping[str, Any]) -> list[str]:
     """Return every required key path absent from the loaded YAML mapping."""
     missing: list[str] = []
@@ -214,7 +229,6 @@ def _required_keys(raw: Mapping[str, Any]) -> list[str]:
                 if f.name not in section["boosts"]:
                     missing.append(f"retrieval.boosts.{f.name}")
     return missing
-
 
 def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
     """Construct every nested settings section, raising a precise error on any bad value."""
@@ -269,14 +283,13 @@ def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
             }
         ),
         "registry": RegistrySettings(
-            **{
-                f.name: (
-                    _as_str_tuple(raw["registry"][f.name], f"registry.{f.name}")
-                    if f.name == "known_other_amcs"
-                    else str(raw["registry"][f.name])
-                )
-                for f in fields(RegistrySettings)
-            }
+            known_other_amcs=_as_str_tuple(
+                raw["registry"]["known_other_amcs"], "registry.known_other_amcs"
+            ),
+            scheme_aliases=_as_alias_map(raw["registry"]["scheme_aliases"]),
+            education_url=str(raw["registry"]["education_url"]),
+            help_url=str(raw["registry"]["help_url"]),
+            factsheet_index_url=str(raw["registry"]["factsheet_index_url"]),
         ),
         "copy": CopySettings(**{f.name: str(raw["copy"][f.name]) for f in fields(CopySettings)}),
     }
@@ -354,6 +367,29 @@ def _validate(settings: Settings) -> None:
         raise PipelineError("config key embedding.batch_size must be at least 1")
     if not settings.embedding.model_id:
         raise PipelineError("config key embedding.model_id must not be empty")
+
+    registry = settings.registry
+    if not registry.scheme_aliases:
+        raise PipelineError(
+            "config key registry.scheme_aliases must map at least one scheme_id to its aliases; "
+            "without it no question can be resolved to a scheme (architecture.md §11.3)"
+        )
+    for url_key, url_value in (
+        ("registry.education_url", registry.education_url),
+        ("registry.help_url", registry.help_url),
+    ):
+        if not url_value:
+            raise PipelineError(
+                f"config key {url_key} must not be empty: it is rendered to users in a refusal "
+                "or redirect message, and an invented URL is a visible defect (PRD §12)"
+            )
+    for url_key, url_value in (
+        ("registry.education_url", registry.education_url),
+        ("registry.help_url", registry.help_url),
+        ("registry.factsheet_index_url", registry.factsheet_index_url),
+    ):
+        if url_value and not url_value.startswith("https://"):
+            raise PipelineError(f"config key {url_key}: must be an https:// URL, got {url_value!r}")
 
 
 def _canonical(value: Any) -> Any:
