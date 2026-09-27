@@ -111,15 +111,15 @@ Total ≈ 25 h ≈ 4–5 working days for two people. Phases 0–5 are the *offl
 
 | Phase | Status | Commit | Verified by | Notes |
 | --- | --- | --- | --- | --- |
-| 0 Spike | ☐ | | | |
-| 1 Scaffold | ☐ | | | |
-| 2 Registry | ☐ | | | |
-| 3 Loading | ☐ | | | |
-| 4 Chunking | ☐ | | | |
-| 5 Embed+Store | ☐ | | | |
-| 6 Retrieval | ☐ | | | |
-| 7 Generation | ☐ | | | |
-| 8 Guardrails | ☐ | | | |
+| 0 Spike | ☑ | (spike script, no code) | docs/corpus_matrix.md | 5/5 pages yield text; 5 of 7 fact families present, lock-in and statements absent |
+| 1 Scaffold | ☑ | a8c50a5 | tests/test_config.py, test_models.py | config_hash reproducible |
+| 2 Registry | ☑ | d017d1a | tests/test_registry.py | sources.csv allowlist |
+| 3 Loading | ☑ | 8a56d80, 8543ea9 | tests/test_loading.py, test_pii.py | PII redaction at ingest |
+| 4 Chunking | ☑ | 170c0a2 | tests/test_chunking.py | 3 variants for ablation A1 |
+| 5 Embed+Store | ☑ | 1b1e0ce, 3b08307 | tests/test_store.py, test_embedding.py | 106 chunks, corpus_hash pinned |
+| 6 Retrieval | ☑ | da5f087 | tests/test_retrieval.py | hybrid + MMR + grounding gate |
+| 7 Generation | ☑ | 7ab69b3 | tests/test_generation.py | extractive first, LLM optional |
+| 8 Guardrails | ☑ | this commit | tests/test_guardrails.py | V1-V6, build_answer, route, logging policy |
 | 9 End-to-end | ☐ | | | |
 | 10 UI | ☐ | | | |
 | 11 Eval | ☐ | | | |
@@ -958,6 +958,61 @@ Conventions: frozen dataclasses, type hints, docstrings, no inline comments, no 
 Verify: run the five `ask` example queries from this phase and paste the outputs, then
 `python -m pytest -q tests/test_guardrails.py`.
 ```
+
+### Notes (deviations from the phase plan above, and why)
+
+1. **`src/guardrails.py` re-derives the sentence splitter and the on-topic rule instead of importing
+   them.** `src/generation.py` already owns an abbreviation-aware splitter, and reusing it would be
+   the obvious DRY move, but architecture §5.2 forbids `guardrails` from importing `generation` or
+   `retrieval` — and that rule is not bookkeeping. The extractive fallback is what the caller reaches
+   for when validation fails, and a cycle between the two modules would make the fallback
+   unreachable, which is the one thing this phase exists to guarantee. The duplication is ~10 lines and
+   is asserted by `tests/test_layering.py`.
+
+2. **`pipeline.answer()` now returns an `Answer`; the printing half is `pipeline.ask()`.** Phase 7
+   left `answer()` returning a process exit code and printing the draft, which the UI and the eval
+   harness both need to *not* do. `python -m src.pipeline ask "<question>"` now takes the query
+   positionally or via `--query` and adds `--debug` for the full `Answer.trace` as JSON (Phase 9).
+   Verified: `python -m src.pipeline --help` still lists `build`, `dump`, and `ask`.
+
+3. **`retrieval.fact_terms.lock_in` lost `"tax saver"`, and two Phase 6 tests changed with it.**
+   This was found by running the phase's own verify query. "Tax saver" is a *scheme alias*, so it
+   appears in the scheme name of every S3 chunk and satisfied term coverage for a lock-in question
+   whose answer is not in the corpus at all: `ask "Is there a lock-in on the ELSS tax saver fund?"`
+   returned three confident sentences, none of which mentioned a lock-in. With the term removed the
+   gate refuses honestly and the answer is `not_in_corpus`. The gate was not weakened; the evidence
+   requirement got stricter. `test_lock_in_query_keeps_the_scheme_filter` became
+   `test_lock_in_query_resolves_the_scheme_even_though_the_gate_refuses` (it now asserts the scheme
+   filter on the candidate trace instead of on a context that is no longer returned), and
+   `test_a_repeated_term_counts_once_not_once_per_occurrence` was re-expressed on a term that is
+   still in the config, since the behaviour it pins is distinct-term counting, not that term.
+
+4. **The corpus holds no lock-in and no statement text** (Phase 0 measured this; see
+   `docs/corpus_matrix.md`). Those two of the seven fact families are therefore answered
+   `not_in_corpus` with the scheme page link, and the golden set in Phase 9 is built from what the
+   corpus *actually* contains: five schemes × expense ratio, exit load, minimum SIP, risk rating,
+   benchmark.
+
+5. **Redirect links, per kind, are all full-string matches to a row of `data/sources.csv`.**
+   `factsheet_index_url` is empty (HDFC's host 403s a scripted client, see config comments), so the
+   performance redirect falls back to the resolved scheme's own page; a performance question with no
+   resolvable scheme links to the help centre; out-of-corpus links to the AMFI education page; PII to
+   the help centre. `route()` drops the link entirely rather than emit an empty one.
+
+6. **V5 stays strict even though the corpus contains a legitimate "returns".** The tax chunks say
+   "If you redeem within one year, returns are taxed at 20%", which is a tax rule and would be flagged
+   by the `return`/`returns` ban. It never reaches an answer, because the statements family has no
+   term coverage in this corpus and the gate refuses first. Relaxing the ban to accommodate corpus
+   prose would weaken C3 for no gain, so it is left strict; the extractive retry is the designed path
+   for that case, and if a future corpus makes tax text answerable the right fix is a *claim*-shaped
+   ban pattern, not a looser one.
+
+7. **The logging policy (§14.3) lives in `src/pipeline.py` as `QueryTextFilter` plus a
+   `SAFE_LOG_FIELDS` allowlist.** Logging is orchestration: `answer()` is the only place that knows
+   both the question and the outcome, and it logs intent class, timings, chunk ids, scores, the
+   guardrail verdict, and PII *counts*. The allowlist is a mechanism rather than a convention, so a
+   later stage cannot leak a query by forgetting to redact it — and `tests/test_guardrails.py`
+   asserts that a PAN never appears in the log output.
 
 ---
 

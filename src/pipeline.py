@@ -1,13 +1,16 @@
-"""The offline build: loading → chunking → embedding → storage, plus the CLI that runs it.
+"""The offline build (loading → chunking → embedding → storage) and the online path (intent →
+retrieval → generation → guardrails), plus the CLI that runs both.
 
-This is the only module that wires stages together (AGENTS.md), and Phase 5 is the last stage it
-runs: after `build()` returns, everything a question needs exists on disk, so `ask.py` in a later
-phase starts with a collection it never builds.
+This is the only module that wires stages together (AGENTS.md). Two properties matter more than the
+sequence itself. A build without `--refresh` makes no network calls at all, because
+`loading.load_all` reuses the snapshots in `data/raw/` and never opens a client; and the
+`corpus_hash` makes a rebuild checkable, so `--rebuild` can be asserted to produce the identical
+chunk set rather than merely a similar one. On the query side, the order of the stages in `answer()`
+is the guarantee that a refusal never consults the corpus or the model.
 
-Two properties matter more than the sequence itself. A build without `--refresh` makes no network
-calls at all, because `loading.load_all` reuses the snapshots in `data/raw/` and never opens a
-client; and the `corpus_hash` makes a rebuild checkable, so `--rebuild` can be asserted to produce
-the identical chunk set rather than merely a similar one.
+The logging policy of architecture.md §14.3 lives here too, because logging is orchestration: the
+`answer()` call is the only place that knows both what was asked and what came back, and it is the
+one place that can therefore record the outcome without recording the question.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import re
 import sys
 import time
@@ -24,15 +28,99 @@ from typing import Any
 
 import numpy as np
 
-from src import chunking, embedding, loading, store, templates
-from src.config import Settings, config_hash, load_settings
-from src.generation import resolve_generator
+from src import chunking, embedding, guardrails, loading, store, templates
+from src.config import Settings, config_hash, load_llm_env, load_settings
+from src.generation import ExtractiveGenerator, resolve_generator
 from src.intents import classify, has_pii
-from src.models import BuildReport, ChunkRecord, GateResult, Intent, PipelineError
-from src.retrieval import retrieve
+from src.models import Answer, BuildReport, ChunkRecord, GateResult, Intent, PipelineError
+from src.registry import load_registry
+from src.retrieval import NON_FACTUAL, retrieve_with_debug
 
 VECTOR_DUMP_WIDTH = 100
 VECTOR_DUMP_TEXT_WIDTH = 86
+LOGGER = logging.getLogger("mf_faq")
+
+# The only fields that may ever reach a log record (architecture.md §14.3). An allowlist rather
+# than a denylist, because a denylist is only as good as the next field someone adds.
+SAFE_LOG_FIELDS: frozenset[str] = frozenset(
+    {
+        "stage",
+        "kind",
+        "intent",
+        "matched_rule",
+        "scheme_id",
+        "scheme_name",
+        "fact_family",
+        "generator",
+        "guardrail",
+        "top_score",
+        "tau",
+        "chunks",
+        "candidates",
+        "context_tokens",
+        "citation_source_id",
+        "link_type",
+        "pii_kinds",
+        "pii_hit_count",
+        "timings_ms",
+        "content_hash",
+        "duration_s",
+        "config_hash",
+        "corpus_hash",
+        "chunk_count",
+        "sources_ok",
+        "sources_failed",
+        "warnings",
+    }
+)
+
+
+class QueryTextFilter(logging.Filter):
+    """Drop any record carrying a `query` field unless LOG_QUERIES is switched on locally.
+
+    The filter is the mechanism, not a convention: every other module is free to attach a query to
+    its log record while debugging, and this is what stops that text reaching stdout by default.
+    """
+
+    def __init__(self, log_queries: bool | None = None) -> None:
+        self._log_queries = (
+            load_llm_env().log_queries if log_queries is None else bool(log_queries)
+        )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False for a record that carries raw query text while logging is switched off."""
+        if self._log_queries:
+            return True
+        return not hasattr(record, "query")
+
+
+def configure_logging(log_queries: bool | None = None) -> logging.Logger:
+    """Attach a stdout handler carrying the query-text filter, and return the pipeline logger."""
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    handler.addFilter(QueryTextFilter(log_queries))
+    for existing in list(LOGGER.handlers):
+        LOGGER.removeHandler(existing)
+    LOGGER.addHandler(handler)
+    LOGGER.setLevel(logging.INFO)
+    LOGGER.propagate = False
+    return LOGGER
+
+
+def log_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    """Return only the allowlisted fields of a trace, for a log record.
+
+    Everything allowlisted is a class name, an id, a count, a score, or a duration. The user query,
+    the assembled context, the draft, and the raw model output are all absent by construction.
+    """
+    return {key: value for key, value in fields.items() if key in SAFE_LOG_FIELDS}
+
+
+def log_answer(answer: Answer, logger: logging.Logger | None = None) -> None:
+    """Record how a question was answered, never what it said (architecture.md §14.3)."""
+    target = logger if logger is not None else LOGGER
+    target.info("answered %s", json.dumps(log_fields(answer.trace), default=str))
+
 
 
 def corpus_hash(chunks: list[ChunkRecord]) -> str:
@@ -282,50 +370,150 @@ def answer(
     query: str,
     provider: str | None = None,
     settings: Settings | None = None,
-) -> int:
-    """Run the online path for one question and print the draft, returning a process exit code.
+) -> Answer:
+    """Answer one question end to end, log the outcome, and return a validated, cited Answer.
 
-    Wiring the stages together is this module's job alone (architecture.md §5.2), which is why the
-    stage-6 CLI lives here rather than in src/generation.py: a generator that imported the intent
-    and retrieval stages to fetch its own context would make the grounding gate depend on the model.
+    The wrapper exists so that every path is logged exactly once, including the paths that return
+    before retrieval, and so that the logged fields are drawn from the finished trace rather than
+    from whatever each branch happened to have in hand.
+    """
+    result = _answer(query, provider, settings)
+    log_answer(result)
+    return result
+
+
+def _answer(
+    query: str,
+    provider: str | None = None,
+    settings: Settings | None = None,
+) -> Answer:
+    """Run the online path for one question (architecture.md §15.2).
+
+    The order is the guarantee. PII and the non-factual intents are answered from a template before
+    anything is retrieved or generated, so a refusal cannot consult the corpus, the model, or the
+    network. Only then does the grounding gate, the generator, and the validators run, with the
+    deterministic composer as the single fallback when a draft fails V2 to V6.
     """
     resolved = settings if settings is not None else load_settings()
     if provider is not None:
         resolved = replace(
             resolved, generation=replace(resolved.generation, provider=provider)
         )
-    if has_pii(query):
-        print(_render_copy(templates.PII_REFUSAL, resolved, link=resolved.registry.help_url))
-        return 1
+    registry = load_registry(resolved)
+    started = time.perf_counter()
     classification = classify(query, resolved)
-    if classification.intent is Intent.PERFORMANCE_REQUEST:
-        redirect = _render_copy(
-            templates.PERFORMANCE_REDIRECT,
-            resolved,
-            link=resolved.registry.factsheet_index_url,
+    pii_hits = has_pii(query)
+    if pii_hits or classification.intent is Intent.PII_REQUEST:
+        refusal = guardrails.route(Intent.PII_REQUEST, None, None, registry, resolved)
+        return replace(
+            refusal,
+            trace={
+                **refusal.trace,
+                "pii_kinds": sorted({hit.kind.value for hit in pii_hits}),
+                "pii_hit_count": len(pii_hits),
+                "timings_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 2)},
+            },
         )
-        print(f"{classification.intent.value}: {redirect}")
-        return 0
-    if classification.intent is Intent.OUT_OF_CORPUS:
-        print(f"{classification.intent.value}: {_render_copy(templates.OUT_OF_CORPUS_MESSAGE, resolved)}")
-        return 0
-    if classification.intent is Intent.SMALLTALK:
-        print(f"{classification.intent.value}: {_render_copy(templates.SMALLTALK_MESSAGE, resolved)}")
-        return 0
-    if classification.intent is Intent.ADVICE_REQUEST:
-        print(f"{classification.intent.value}: {_render_copy(templates.REFUSAL_MESSAGE, resolved)}")
-        return 0
-    result = retrieve(query, resolved)
-    if isinstance(result, GateResult):
-        print(f"GATE_REJECTED: {result.reason} (top_score={result.top_score:.3f})")
-        return 0
-    generator, provider_name = resolve_generator(resolved)
-    draft = generator.generate(result, query, classification.intent)
-    print(f"provider : {provider_name}")
-    print(f"intent   : {classification.intent.value}")
-    print(f"sentinels: {draft.sentinels or 'none'}")
-    print(f"answer   : {draft.text or '(empty)'}")
+    if classification.intent in NON_FACTUAL:
+        return guardrails.route(
+            classification.intent,
+            None,
+            None,
+            registry,
+            resolved,
+            classification.scheme_id,
+        )
+
+    context, retrieval_trace = retrieve_with_debug(query, resolved)
+    timings: dict[str, float] = {
+        "retrieval_ms": round((time.perf_counter() - started) * 1000, 2)
+    }
+    if context is None:
+        gate = GateResult(
+            False,
+            float(retrieval_trace["gate"]["top_score"]),
+            float(retrieval_trace["gate"]["threshold"]),
+            str(retrieval_trace["gate"]["reason"]),
+            list(retrieval_trace["gate"]["covered_terms"]),
+        )
+        routed = guardrails.route(
+            Intent.FACTUAL_FACT, gate, None, registry, resolved, classification.scheme_id
+        )
+        return replace(
+            routed,
+            trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+        )
+
+    generator, _provider_name = resolve_generator(resolved)
+    clock = time.perf_counter()
+    draft = generator.generate(context, query, classification.intent)
+    timings["generation_ms"] = round((time.perf_counter() - clock) * 1000, 2)
+    report = guardrails.validation_report(draft, context, resolved)
+    verdict = guardrails.first_failure(report)
+    timings["guardrails_ms"] = round((time.perf_counter() - clock) * 1000, 2)
+
+    if verdict.startswith("v1_"):
+        intent = Intent.ADVICE_REQUEST if verdict == "v1_refusal" else Intent.FACTUAL_FACT
+        routed = guardrails.route(intent, None, context, registry, resolved)
+        return replace(
+            routed,
+            trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+        )
+
+    if verdict != "passed":
+        clock = time.perf_counter()
+        fallback = ExtractiveGenerator(resolved).generate(
+            context, query, classification.intent
+        )
+        timings["extractive_retry_ms"] = round((time.perf_counter() - clock) * 1000, 2)
+        fallback_report = guardrails.validation_report(fallback, context, resolved)
+        fallback_verdict = guardrails.first_failure(fallback_report)
+        if fallback.text and fallback_verdict == "passed":
+            draft, report, verdict = fallback, fallback_report, verdict
+
+    if verdict != "passed" or not draft.text:
+        routed = guardrails.route(Intent.FACTUAL_FACT, None, context, registry, resolved)
+        return replace(
+            routed,
+            trace={
+                **retrieval_trace,
+                **routed.trace,
+                "guardrail": verdict,
+                "validators": report,
+                "timings_ms": timings,
+            },
+        )
+
+    answer_value = guardrails.build_answer(
+        draft,
+        context,
+        classification.intent,
+        registry,
+        resolved,
+        guardrail=verdict,
+        report=report,
+        timings_ms=timings,
+    )
+    return replace(answer_value, trace={**retrieval_trace, **answer_value.trace})
+
+
+def ask(query: str, provider: str | None = None, debug: bool = False) -> int:
+    """Answer one question from the terminal and print the rendered answer, returning an exit code."""
+    try:
+        result = answer(query, provider)
+    except PipelineError as exc:
+        print(f"error: {exc}")
+        return 2
+    print(f"kind       : {result.kind}")
+    print(f"generator  : {result.generator}")
+    print(f"answer     : {result.text}")
+    print(f"source     : {result.citation_url or '(none)'}")
+    print(f"last updated: {result.last_updated or '(none)'}")
+    if debug:
+        print("trace      :")
+        print(json.dumps(result.trace, indent=2, ensure_ascii=False, default=str))
     return 0
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -349,23 +537,33 @@ def main(argv: list[str] | None = None) -> int:
     )
     answer_parser = subparsers.add_parser(
         "ask",
-        help="classify, retrieve and generate a draft answer for one question (stage 6 CLI)",
+        help="answer one question end to end and print the cited answer",
     )
-    answer_parser.add_argument("--query", required=True, help="the user's question")
+    answer_parser.add_argument("query", nargs="?", help="the user's question")
+    answer_parser.add_argument(
+        "--query", dest="query_flag", default=None, help="the user's question"
+    )
     answer_parser.add_argument(
         "--provider",
         choices=("auto", "llm", "extractive"),
         default=None,
         help="override config.generation.provider for this run",
     )
+    answer_parser.add_argument(
+        "--debug", action="store_true", help="print the full Answer.trace as JSON"
+    )
     arguments = parser.parse_args(argv)
     settings = load_settings()
+    configure_logging()
     if arguments.command == "dump":
         path = dump(settings)
         print(f"wrote {path} ({path.stat().st_size / 1024:.0f} KB)")
         return 0
     if arguments.command == "ask":
-        return answer(arguments.query, arguments.provider, settings)
+        query_text = arguments.query_flag or arguments.query
+        if not query_text:
+            parser.error("ask requires a question, positionally or via --query")
+        return ask(query_text, arguments.provider, arguments.debug)
     if arguments.command != "build":
         parser.error(f"unknown command {arguments.command!r}")
     report = build(refresh=arguments.refresh, rebuild=arguments.rebuild, settings=settings)

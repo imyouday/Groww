@@ -112,18 +112,18 @@ def test_boost_is_evidence_based_so_an_absent_term_earns_nothing() -> None:
 
 
 def test_a_repeated_term_counts_once_not_once_per_occurrence() -> None:
-    """A measured bug: the S3 "About" chunk says "tax saver" three times and was paid 0.15 for it."""
+    """A measured bug: a chunk that repeats one term was paid the additional-term bonus twice."""
     text = (
-        "HDFC ELSS Tax Saver Fund is an ELSS. HDFC ELSS tax saver fund has a long tenure. "
-        "The tax saver fund is open ended."
+        "Expense ratio is 1.03%. The expense ratio is disclosed in the factsheet. "
+        "This expense ratio note repeats the label."
     )
     boosted = retrieval.boost(
         [make_candidate(text=text, section_type=SectionType.GENERAL)],
-        "lock-in",
-        FactFamily.LOCK_IN,
+        "expense ratio",
+        FactFamily.EXPENSE_RATIO,
         None,
     )
-    assert boosted[0].matched_terms == ["tax saver"]
+    assert boosted[0].matched_terms == ["expense ratio"]
     assert boosted[0].keyword_boost == pytest.approx(0.05)
 
 
@@ -350,11 +350,12 @@ def test_expense_ratio_query_returns_the_fee_chunk_for_the_named_scheme() -> Non
     assert context.total_tokens <= load_settings().retrieval.context_token_budget
 
 
-def test_lock_in_query_keeps_the_scheme_filter() -> None:
-    context = retrieval.retrieve("Is there a lock-in on the ELSS tax saver fund?")
-    assert not isinstance(context, GateResult)
-    assert context.scheme_id == "S3"
-    assert {item.chunk.scheme_id for item in context.chunks} == {"S3"}
+def test_lock_in_query_resolves_the_scheme_even_though_the_gate_refuses() -> None:
+    """The corpus holds no lock-in text, so the gate must refuse. The scheme filter must still apply."""
+    context, trace = retrieval.retrieve_with_debug("Is there a lock-in on the ELSS tax saver fund?")
+    assert context is None
+    assert trace["scheme_id"] == "S3"
+    assert {item["scheme"] for item in trace["candidates"]} == {"S3"}
 
 
 def test_an_unclassified_question_is_gated_at_the_raised_threshold() -> None:

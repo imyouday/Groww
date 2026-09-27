@@ -56,7 +56,11 @@ retrieval:
     expense_ratio: ["expense ratio", "ter", "expense ratio and other fees", "charges"]
     exit_load: ["exit load", "exit charges", "load"]
     min_sip: ["minimum sip", "min sip", "min. for sip", "min. for", "minimum investment", "minimum amount"]
-    lock_in: ["lock-in", "lock in", "3 years", "80c", "tax saver"]
+    # "tax saver" was here in Phase 6 and is deliberately gone: it is a scheme alias, present in the
+    # scheme name of every S3 chunk, so it satisfied term coverage for a lock-in question whose answer
+    # is not in the corpus. The gate must fail "is there a lock-in?" honestly rather than answer with
+    # a sentence that never mentions a lock-in. docs/corpus_matrix.md records the gap.
+    lock_in: ["lock-in", "lock in", "3 years", "80c"]
     riskometer: ["riskometer", "risk"]
     benchmark: ["benchmark", "index"]
     statements: ["capital gains", "statement", "tax report", "download"]
