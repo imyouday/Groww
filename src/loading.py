@@ -47,6 +47,7 @@ STRIP_SELECTORS: tuple[str, ...] = (
     "header",
     "footer",
     "nav",
+    "title",
     "[role='navigation']",
     "[class*='cookie' i]",
     "[id*='consent' i]",
@@ -80,9 +81,23 @@ FACT_TERMS: dict[FactFamily, tuple[str, ...]] = {
 _MANY_NEWLINES = re.compile(r"\n{3,}")
 
 # A labelled NAV line is a performance figure (PRD C3) and is dropped at ingest rather than
-# refused at query time. Only the label-and-value line goes: neighbouring stat lines such as
+# refused at query time. Only the label-and-value pair goes: neighbouring stat lines such as
 # "Min. for SIP" are in scope and must survive.
 PERFORMANCE_LINE = re.compile(r"^\s*NAV\s*:", re.IGNORECASE)
+# The amount sits in a sibling node, so removing the label node alone orphans the figure and
+# leaves a bare rupee value in the corpus with nothing to mark it as a NAV. The pair wrapper is
+# the label node's grandparent, and it is short because it holds exactly a label and a value.
+PERFORMANCE_PAIR_MAX_CHARS = 40
+# Each page's own summary sentence repeats the NAV as prose ("... and the Latest NAV as of
+# 25 Sep 2026 is 1,189.08."), which no selector can reach because it is page copy rather than a
+# widget. The clause is removed whole so the sentence keeps its AUM fact and stays grammatical.
+# Anchoring on "Latest NAV as of <date> is <amount>" is what makes this safe: a bare "NAV" token
+# also appears in ordinary prose that carries no figure, and stripping on the token alone would
+# silently delete sentences.
+NAV_CLAUSE = re.compile(
+    r",?\s*(?:and\s+)?the\s+Latest\s+NAV\s+as\s+of\s+[^.]*?\s+is\s+[₹\d][\d,.]*",
+    re.IGNORECASE,
+)
 _TRAILING_SPACE = re.compile(r"[ \t]+\n")
 _INLINE_SPACE = re.compile(r"[ \t]{2,}")
 _NON_BREAKING = {
@@ -149,6 +164,29 @@ def soup_free_text(text: str) -> str:
     return text.translate(_NON_BREAKING)
 
 
+def strip_performance_pairs(soup: BeautifulSoup) -> None:
+    """Remove each labelled NAV figure together with its value, in place.
+
+    The page renders every stat tile as a wrapper holding a label div and a value div, so a
+    label-only removal deletes the words "NAV: 25 Sep '26" and leaves "1,189.08" behind. The
+    wrapper is the label's grandparent; the length guard keeps the rule from reaching further up
+    and deleting a whole tile group when a page ever inlines the label differently.
+    """
+    for node in list(soup.find_all(string=PERFORMANCE_LINE)):
+        label_wrapper = node.parent
+        pair = label_wrapper.parent if label_wrapper is not None else None
+        if pair is None or label_wrapper.name not in {"p", "div", "span", "td"}:
+            continue
+        if len(pair.get_text(" ", strip=True)) > PERFORMANCE_PAIR_MAX_CHARS:
+            continue
+        pair.decompose()
+
+
+def strip_nav_clauses(text: str) -> str:
+    """Return text with each "Latest NAV as of <date> is <amount>" clause removed."""
+    return NAV_CLAUSE.sub("", text)
+
+
 def clean(html: str, settings: Settings, min_chars: int | None = None) -> str:
     """Return the readable text of html, or raise ParseEmptyError when too little survives.
 
@@ -177,12 +215,14 @@ def clean(html: str, settings: Settings, min_chars: int | None = None) -> str:
     for tag in BLOCK_TAGS:
         for node in soup.find_all(tag):
             node.insert_before("\n")
+    strip_performance_pairs(soup)
     for node in soup.find_all(string=PERFORMANCE_LINE):
         node.parent.decompose()
     for node in soup.find_all("br"):
         node.replace_with("\n")
 
     text = normalise(soup.get_text("\n"))
+    text = strip_nav_clauses(text)
 
     threshold = settings.loading.min_extracted_chars if min_chars is None else min_chars
     if len(text) < threshold:

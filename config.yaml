@@ -77,15 +77,24 @@ loading:
   # "Return calculator" widget whose historical-return table is exactly that risk.
   # Matched case-insensitively as a substring of any class attribute, so the hashed CSS-module
   # suffixes Groww emits (returnStats_tickerContainer___25d1) are caught by their stable prefix.
-  # Verified against all five pages: these are the only classes that carry a return, NAV, or
-  # ranking figure.
+  # "compareSimilarFunds" is the cross-fund 1Y/3Y return table and "mfGraph" is the NAV chart
+  # with its 1M/6M/1Y range buttons; both survived the first pass and both were found by reading
+  # data/processed/ rather than by assuming the spike was representative.
+  # The remaining entries are site chrome, not facts. They are removed here for the same reason
+  # the table rows must survive: an A-Z product index or a mega-menu of calculators is ~150 lines
+  # of noise that the §8.5 boilerplate filter can only partly catch, because lines like "1M 6M
+  # 1Y 3Y 5Y All" contain digits and pass the "short and digitless" test.
   drop_class_substrings:
     - returnCalculator
     - returnStats
     - returnsAndRankings
-    - historicReturn
-    - performanceChart
-    - navHistory
+    - compareSimilarFunds
+    - mfGraph
+    - loggedOut_hover
+    - loggedOut_navContainer
+    - letterLinks
+    - footerTopSection
+    - footer_other
 
 guardrails:
   max_sentences: 3

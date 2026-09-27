@@ -7,6 +7,8 @@ socket is opened, not after a response comes back.
 
 from __future__ import annotations
 
+import re
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -32,8 +34,13 @@ from src.models import (
 from src.registry import load_registry
 
 FIXTURE_HTML = """
-<html><body>
+<html>
+  <head>
+    <title>HDFC Large Cap Fund Direct Growth - NAV, Mutual Fund Performance &amp; Portfolio</title>
+  </head>
+  <body>
   <header>Mutual Funds | Groww | Login</header>
+  <div class="loggedOut_navContainer__h99vu"><span>Stocks</span><span>F&amp;O</span></div>
   <h1>HDFC Large Cap Fund</h1>
   <h2>Fund Overview</h2>
   <p>Expense ratio is 1.03% for the direct growth plan.</p>
@@ -47,8 +54,29 @@ FIXTURE_HTML = """
     <tr><td>Min. for SIP</td><td>Rs 100</td></tr>
   </table>
   <div class="returnStats_tickerContainer__x">+8.71 % 3Y annualised</div>
-  <div>NAV: 25 Sep '26</div>
+  <div class="fundDetails_gap4__kM__Q">
+    <div class="fundDetails_gap4__kM__Q">NAV: 25 Sep '26</div>
+    <div>1,189.08</div>
+  </div>
+  <div class="fundDetails_gap4__kM__Q">
+    <div class="fundDetails_gap4__kM__Q">Min. for SIP</div>
+    <div>Rs 100</div>
+  </div>
+  <div class="fundDetails_gap4__kM__Q">
+    <div class="fundDetails_gap4__kM__Q">Fund size (AUM)</div>
+    <div>Rs 39,933.37 Cr</div>
+  </div>
+  <div class="mfGraph_buttonsContainer__AtbZS"><span>1M</span><span>6M</span><span>5Y</span><span>All</span></div>
+  <div class="compareSimilarFunds_container__VCScJ">
+    <h3>Compare similar funds</h3>
+    <table>
+      <tr><th>Name</th><th>1Y</th><th>3Y</th></tr>
+      <tr><td>Invesco India Large Cap Fund Direct Growth</td><td>+2.51%</td><td>+13.80%</td></tr>
+    </table>
+  </div>
   <p>Fund benchmark NIFTY 100 Total Return Index</p>
+  <div class="letterLinks_mb40__RN8GD">A<br>B<br>C</div>
+  <div class="footerTopSection_gridContainer__UumRK">Brokerage and charges on Groww</div>
   <footer>Read more | Know more | Download app</footer>
 </body></html>
 """
@@ -79,6 +107,25 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
             raise AssertionError("the network must not be reached in this test")
 
     monkeypatch.setattr(httpx, "Client", Tripwire)
+
+
+@pytest.fixture(scope="module")
+def scratch_settings(settings, tmp_path_factory):
+    """Settings whose raw and processed directories are temporary, for tests that really fetch.
+
+    A test that passes refresh=True overwrites data/raw/, and data/raw/ is a committed
+    artefact: letting the suite rewrite it would make the corpus depend on test order and would
+    dirty the working tree on every run.
+    """
+    root = tmp_path_factory.mktemp("scratch")
+    return replace(
+        settings,
+        paths=replace(
+            settings.paths,
+            raw_dir=str(root / "raw"),
+            processed_dir=str(root / "processed"),
+        ),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -134,6 +181,70 @@ def test_clean_drops_performance_figures(settings) -> None:
     assert "3Y annualised" not in text
     assert "+8.71" not in text
     assert "NAV: 25 Sep" not in text
+
+
+def test_clean_drops_the_nav_value_with_its_label(settings) -> None:
+    text = clean(FIXTURE_HTML, settings, min_chars=50)
+    assert "1,189.08" not in text
+
+
+def test_clean_keeps_the_stat_tiles_beside_the_nav(settings) -> None:
+    text = clean(FIXTURE_HTML, settings, min_chars=50)
+    assert "Min. for SIP" in text
+    assert "Fund size (AUM)" in text
+
+
+def test_clean_drops_the_cross_fund_return_comparison(settings) -> None:
+    text = clean(FIXTURE_HTML, settings, min_chars=50)
+    assert "Compare similar funds" not in text
+    assert "+13.80%" not in text
+
+
+def test_clean_drops_the_nav_chart_range_buttons(settings) -> None:
+    text = clean(FIXTURE_HTML, settings, min_chars=50)
+    for button in ("1M", "6M", "5Y", "All"):
+        assert button not in text.split("\n")
+
+
+def test_clean_drops_the_page_title(settings) -> None:
+    text = clean(FIXTURE_HTML, settings, min_chars=50)
+    assert "Mutual Fund Performance" not in text
+
+
+def test_clean_removes_a_nav_clause_from_prose(settings) -> None:
+    html = (
+        "<html><body><p>The fund currently has an Asset Under Management(AUM) of "
+        "&#8377;9,86,237 Cr and the Latest NAV as of 25 Sep 2026 is &#8377;1,189.08."
+        "</p><p>Minimum SIP Investment is set to &#8377;100.</p></body></html>"
+    )
+    text = clean(html, settings, min_chars=50)
+    assert "Latest NAV" not in text
+    assert "1,189.08" not in text
+    assert "Asset Under Management(AUM) of" in text
+    assert "Minimum SIP Investment is set to" in text
+
+
+def test_clean_keeps_prose_that_mentions_nav_without_a_figure(settings) -> None:
+    html = (
+        "<html><body><p>" + ("The NAV is disclosed daily on the AMC website. " * 12) + "</p></body></html>"
+    )
+    text = clean(html, settings, min_chars=50)
+    assert "NAV is disclosed daily" in text
+
+
+def test_clean_drops_site_chrome_that_is_not_markup_chrome(settings) -> None:
+    html = (
+        "<html><body>"
+        "<div class='loggedOut_navContainer__h99vu'><span>Stocks</span><span>F&amp;O</span></div>"
+        "<div class='letterLinks_mb40__RN8GD'>A<br>B<br>C<br>D</div>"
+        "<div class='footerTopSection_gridContainer__UumRK'>Brokerage and charges</div>"
+        "<p>Expense ratio is 1.03%</p>"
+        "</body></html>"
+    )
+    text = clean(html, settings, min_chars=20)
+    assert "Stocks" not in text
+    assert "Brokerage and charges" not in text
+    assert "Expense ratio is 1.03%" in text
 
 
 def test_clean_raises_on_a_near_empty_page(settings) -> None:
@@ -310,7 +421,9 @@ def test_a_failing_source_becomes_a_warning_not_an_exception(settings, registry,
         assert "SourceFetchError" in warning
 
 
-def test_one_failing_source_does_not_stop_the_others(settings, registry, monkeypatch) -> None:
+def test_one_failing_source_does_not_stop_the_others(
+    scratch_settings, registry, monkeypatch
+) -> None:
     no_sleep(monkeypatch)
     real_get = httpx.Client.get
 
@@ -320,18 +433,63 @@ def test_one_failing_source_does_not_stop_the_others(settings, registry, monkeyp
                 raise httpx.ConnectError("simulated outage on one source only")
             return real_get(self, url, **kwargs)
 
-    docs, warnings = load_all(registry, settings, client=FlakyOnS3(), refresh=True)
+    committed = {path: path.stat().st_mtime_ns for path in sorted(Path("data/raw").glob("S*.html"))}
+    docs, warnings = load_all(registry, scratch_settings, client=FlakyOnS3(), refresh=True)
     assert [doc.source.source_id for doc in docs] == ["S1", "S2", "S4", "S5"]
     assert len(warnings) == 1
     assert warnings[0].startswith("S3:")
+    assert {path: path.stat().st_mtime_ns for path in committed} == committed
+
+
+def test_a_refresh_run_does_not_touch_the_committed_snapshots(
+    scratch_settings, registry, settings
+) -> None:
+    before = {
+        path: path.stat().st_mtime_ns
+        for path in sorted(settings.paths.resolve("raw_dir").glob("S*.html"))
+    }
+    load_all(registry, scratch_settings, refresh=True)
+    after = {
+        path: path.stat().st_mtime_ns
+        for path in sorted(settings.paths.resolve("raw_dir").glob("S*.html"))
+    }
+    assert before == after
 
 
 def test_processed_corpus_has_no_performance_figures(corpus) -> None:
-    banned = ("annualised", "annualized", "cagr", "xirr", "historic return", "nav:")
+    banned = (
+        "annualised",
+        "annualized",
+        "cagr",
+        "xirr",
+        "historic return",
+        "nav:",
+        "latest nav",
+        "nav history",
+        "since inception",
+        "compare similar funds",
+        "return calculator",
+        "returns and rankings",
+    )
     for doc in corpus:
         lowered = doc.text.lower()
         for term in banned:
             assert term not in lowered, f"{doc.source.source_id} contains {term!r}"
+
+
+def test_processed_corpus_carries_no_bare_nav_figure(corpus) -> None:
+    amount = re.compile(r"₹\d[\d,]*\.\d\d")
+    label = re.compile(r"nav|aum|expense|exit load|min\.|fund size|rating", re.IGNORECASE)
+    for doc in corpus:
+        previous = ""
+        for line in doc.text.splitlines():
+            stripped = line.strip()
+            if amount.search(stripped) and not label.search(stripped) and not label.search(previous):
+                assert stripped.startswith("|"), (
+                    f"{doc.source.source_id} has an unlabelled amount line: {stripped!r}"
+                )
+            if stripped:
+                previous = stripped
 
 
 def test_processed_corpus_has_no_raw_html(corpus) -> None:
