@@ -6,7 +6,7 @@
 | Version | v1.0 |
 | Status | Draft for review |
 | Date | 2026-09-27 |
-| Source brief | `Docs/ProblemStatement.txt` |
+| Source brief | Client milestone brief (client-owned, deliberately not committed; see .gitignore) |
 | Deliverable type | Class demo — working prototype (facts-only RAG chatbot) |
 | Owner | Team (2–3 contributors) |
 
