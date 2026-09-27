@@ -1,0 +1,18 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtualenv
+.venv/
+
+# Generated at build time
+# NOTE: data/raw/ and data/processed/ are intentionally COMMITTED. The snapshot is the source
+# of truth for reproducibility and offline operation (architecture.md §7.3, §18.1). The vector
+# store and the model cache are large and rebuildable, so they are not.
+data/chroma/
+data/models/
+data/chunks.jsonl

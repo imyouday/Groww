@@ -1,0 +1,120 @@
+# config.yaml — all tunable constants for the Mutual Fund FAQ Assistant.
+# Transcribed from architecture.md §20. Secrets never live here (see .env.example).
+# Nothing below may be duplicated as a literal in stage code (architecture.md §18.2).
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  chroma_dir: data/chroma
+  chunks_dump: data/chunks.jsonl
+  sources_csv: data/sources.csv
+  model_cache_dir: data/models
+
+embedding:
+  model_id: sentence-transformers/all-MiniLM-L6-v2   # mandated by the brief
+  batch_size: 32
+  device: cpu
+  normalize: true
+
+chunking:
+  strategy: semantic_section          # | fixed_512   (ablation A1)
+  max_tokens: 600
+  min_tokens: 80
+  overlap_tokens: 60                  # prose only; suppressed on FEES/TAX sections
+  preserve_tables: true
+  include_context_header: true
+  drop_boilerplate: true
+  merge_small_sections: true
+
+chroma:
+  collection_name: mf_faq_hdfc_v1
+  space: cosine
+
+retrieval:
+  dense_k: 12
+  top_n: 5
+  mmr_lambda: 0.3
+  context_token_budget: 1800
+  gate_threshold: 0.35               # calibrated by eval/run_eval.py per architecture.md §12
+  unclassified_gate_margin: 0.10
+  require_term_coverage: true
+  boosts:
+    fact_term: 0.05
+    additional_fact_term: 0.05
+    section_type_match: 0.03
+    scheme_match: 0.02
+  fact_terms:                         # FactFamily -> surface forms used for term-coverage checks
+    expense_ratio: ["expense ratio", "ter", "expense ratio and other fees", "charges"]
+    exit_load: ["exit load", "exit charges", "load"]
+    min_sip: ["minimum sip", "min sip", "minimum investment", "minimum amount"]
+    lock_in: ["lock-in", "lock in", "3 years", "80c", "tax saver"]
+    riskometer: ["riskometer", "risk"]
+    benchmark: ["benchmark", "index"]
+    statements: ["capital gains", "statement", "tax report", "download"]
+
+generation:
+  provider: auto                      # auto | llm | extractive   (ablation A4)
+  model: ""                           # empty => read LLM_MODEL from .env at call time
+  temperature: 0.1
+  max_tokens: 220
+  timeout_s: 8
+  retries: 1
+
+loading:
+  offline_cache_first: true
+  request_delay_s: 1.0
+  timeout_s: 20
+  retries: 3
+  min_extracted_chars: 400
+  allowed_hosts: [groww.in, hdfcmutualfund.com, amfiindia.com, sebi.gov.in]
+
+guardrails:
+  max_sentences: 3
+  enforce_numeric_grounding: true
+  banned_terms: [should, recommend, advisable, best, outperform, guaranteed, return, returns, nav, buy, sell, hold, suitable]
+
+registry:
+  known_other_amcs: [parag, axis, icici, sbi, kotak, tata nippon, nippon, quant, mahindra, icici prudential]
+  # TODO(Phase 2): fill these with the official public pages actually used. They are refusal/
+  # redirect links, so a wrong or invented URL is a visible defect. They are validated as
+  # strings here and asserted non-empty by registry.load_registry() once Phase 2 lands.
+  education_url: ""                   # SEBI / AMFI investor-education page
+  help_url: ""                        # official support channel
+  factsheet_index_url: ""             # AMC factsheets index
+
+# Single source of truth for every user-visible string (architecture.md §20 closing note).
+# src/templates.py exposes these as module constants; the UI, the refusal paths and the README
+# all quote this text so the deliverable "disclaimer snippet" can never drift (PRD §12).
+copy:
+  ui_disclaimer: >-
+    **Facts-only. No investment advice.** This assistant shares publicly available factual
+    information about HDFC AMC schemes and is not a SEBI-registered investment adviser. It does
+    not recommend buying, selling, or holding any fund, and it does not provide return, NAV, or
+    performance figures. Information may change — always verify on the linked official source page.
+
+  refusal_message: >-
+    I can only share facts — I can't recommend funds or suggest what to do with your money. Here's
+    an official investor-education page instead: {link}. Ask me anything factual (expense ratio,
+    exit load, minimum SIP, lock-in, benchmark, statements) and I'll answer with a source.
+
+  performance_redirect: >-
+    I don't provide or compare returns, NAVs, or performance figures. The official factsheet for
+    this scheme has the published figures: {link}.
+
+  pii_refusal: >-
+    Please don't share personal identifiers like PAN, Aadhaar, account numbers, or OTPs — I won't
+    store them. For account-specific help, use the official support channel: {link}.
+
+  out_of_corpus_message: >-
+    My sources cover only HDFC AMC's {scheme_count} schemes ({schemes}), all facts-only. I can't
+    answer from a page I don't have — please treat anything about other funds as unverified here.
+    If you meant an in-scope scheme, I can share its documented facts: {link}
+
+  not_in_corpus_message: >-
+    I don't have that in my sources for the {scheme_count} HDFC AMC schemes I cover, so I won't
+    guess. The official scheme page is the place to check: {link}
+
+  smalltalk_message: >-
+    I'm a facts-only assistant for {scheme_count} HDFC AMC mutual fund schemes. I can tell you the
+    expense ratio, exit load, minimum SIP, ELSS lock-in, riskometer, benchmark, and how to download
+    statements — each answer with one official source link. I never give investment advice.
