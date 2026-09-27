@@ -547,6 +547,10 @@ def embed(texts: list[str]) -> np.ndarray:
 
 **Pre-warm:** `app.py` calls `get_encoder()`, one `embed()` call and `store.connect()` in a `@st.cache_resource` block, so the model load happens before the first question (NFR-2). The `embed()` call is not optional: measured in Phase 5, `get_encoder()` costs ~6 s and the *first* `embed()` still costs ~4.7 s more on its own (tokenizer and torch thread-pool initialisation), while every later single-string embed is 20–35 ms. A pre-warm that only loads the model leaves ~4.7 s sitting on the first user question.
 
+**Missing weights (measured, Phase 5 fix):** `data/models/` is git-ignored, so a machine that has never run this phase has no encoder. The underlying failure is a bare `OSError` from inside huggingface_hub, which is a stack trace from a transitive dependency and not an acceptable answer to a demo machine. `get_encoder()` converts it to `ModelNotCachedError`, naming the cache directory and both remedies (build once while online, or copy `data/models/` across). Verified by moving `data/models/` aside with `HF_HUB_OFFLINE=1`: the typed error is raised with no traceback, where previously the raw `OSError` surfaced.
+
+**Singleton and injected settings:** the encoder is an `lru_cache` singleton, so its model is fixed for the life of the process and `embed(texts, settings)` cannot change it. Rather than let a caller pass a `model_id` that is silently ignored — and get vectors from one model recorded under another's id — `embed()` compares the requested `model_id` with the loaded one and raises `PipelineError` on a mismatch. The same rule is why the fresh-machine test must move the directory rather than inject a temporary `model_cache_dir`.
+
 ---
 
 ## 10. Stage 4 — Vector store (ChromaDB)
@@ -932,6 +936,7 @@ Streamlit chat_input
 | LLM returns sentinel | V1 | Route to template | Refusal / not-in-corpus message |
 | V2–V6 validation failure | `guardrails` | Extractive fallback | Extractive answer; `trace.guardrail="v4_numeric"` |
 | Corpus not built | `store.stats()` at startup | Banner in sidebar: "Index empty — run `python -m src.pipeline build`" | No chat, actionable instruction |
+| Encoder weights absent (`data/models/` empty) | `embedding.get_encoder()` | `ModelNotCachedError` naming the directory and both remedies | Actionable start-up message, not a stack trace (NFR-4) |
 | Unknown scheme in query | `resolve_scheme` | No `where` filter; fact family still enforced | Best in-corpus answer or gate message |
 
 **Invariants under every row above:** at most one citation, ≤ 3 sentences, last-updated stamp present, no advice, no PII echo.

@@ -16,7 +16,13 @@ import pytest
 
 from src import chunking, embedding, pipeline, store
 from src.config import load_settings
-from src.models import ChunkRecord, IndexNotBuiltError, PipelineError, SectionType
+from src.models import (
+    ChunkRecord,
+    IndexNotBuiltError,
+    ModelNotCachedError,
+    PipelineError,
+    SectionType,
+)
 
 DIM = 384
 
@@ -279,6 +285,45 @@ def test_embed_query_returns_one_vector() -> None:
     assert vector.shape == (DIM,)
     assert vector.dtype == np.float32
     assert float(np.linalg.norm(vector)) == pytest.approx(1.0, abs=1e-5)
+
+
+@pytest.fixture
+def cleared_encoder():
+    """Restore the encoder singleton's cache after a test empties or replaces it."""
+    embedding.get_encoder.cache_clear()
+    yield
+    embedding.get_encoder.cache_clear()
+
+
+def test_a_machine_without_the_weights_gets_a_typed_actionable_error(
+    monkeypatch, cleared_encoder
+) -> None:
+    """A fresh clone has no data/models/; that must not surface as a stack trace (NFR-4)."""
+    cache_dir = load_settings().paths.resolve("model_cache_dir")
+
+    def unavailable(*_args, **_kwargs):
+        raise OSError("We couldn't connect to 'https://huggingface.co' to load this file")
+
+    monkeypatch.setattr(embedding, "SentenceTransformer", unavailable)
+    with pytest.raises(ModelNotCachedError) as raised:
+        embedding.get_encoder()
+    message = str(raised.value)
+    assert "src.pipeline build" in message
+    assert "data/models" in message
+    assert str(cache_dir) in message
+
+
+def test_embed_refuses_settings_whose_model_is_not_the_loaded_one(cleared_encoder) -> None:
+    """The encoder is a singleton, so a different model_id must fail loudly, not silently."""
+    base = load_settings()
+    other = replace(base, embedding=replace(base.embedding, model_id="some/other-model"))
+    with pytest.raises(PipelineError, match="singleton"):
+        embedding.embed(["anything"], other)
+
+
+def test_embed_accepts_the_settings_the_encoder_was_built_from(cleared_encoder) -> None:
+    base = load_settings()
+    assert embedding.embed(["consistency check"], base).shape == (1, DIM)
 
 
 def test_encoder_is_loaded_once() -> None:

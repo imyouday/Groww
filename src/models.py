@@ -70,6 +70,10 @@ class IndexNotBuiltError(PipelineError):
     """The vector store has no collection or no chunks, so queries cannot be served."""
 
 
+class ModelNotCachedError(PipelineError):
+    """The encoder weights are not on this machine and cannot be fetched."""
+
+
 @dataclass(frozen=True)
 class SourceRecord:
     """One registered public source page. Row of data/sources.csv (architecture.md §6.1)."""

@@ -21,20 +21,38 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from src.config import Settings, load_settings
-from src.models import PipelineError
+from src.models import ModelNotCachedError, PipelineError
 
 EMBED_DIM = 384
 
 
 @lru_cache(maxsize=1)
 def get_encoder() -> SentenceTransformer:
-    """Return the process-wide encoder, loading it on first use."""
+    """Return the process-wide encoder, loading it on first use.
+
+    The encoder is a singleton, so its configuration is read from the global settings exactly once
+    and any `settings` passed to `embed()` cannot change the model. `embed()` therefore checks that
+    the two agree instead of silently encoding with one model and reporting another's id.
+
+    A machine that has never run this phase has no weights in `data/models/`, and loading then
+    fails with a bare `OSError` from deep inside huggingface_hub. That is turned into
+    `ModelNotCachedError` naming the cache directory and both remedies, because "it should not
+    crash" is a requirement and a stack trace from a transitive dependency is not an answer.
+    """
     settings = load_settings()
-    return SentenceTransformer(
-        settings.embedding.model_id,
-        cache_folder=str(settings.paths.resolve("model_cache_dir")),
-        device=settings.embedding.device,
-    )
+    cache_dir = settings.paths.resolve("model_cache_dir")
+    try:
+        return SentenceTransformer(
+            settings.embedding.model_id,
+            cache_folder=str(cache_dir),
+            device=settings.embedding.device,
+        )
+    except OSError as error:
+        raise ModelNotCachedError(
+            f"could not load {settings.embedding.model_id} from {cache_dir} and could not reach "
+            "the model hub; run `python -m src.pipeline build` once while online, or copy the "
+            f"data/models/ directory from a machine that already has it ({cache_dir})"
+        ) from error
 
 
 @lru_cache(maxsize=1)
@@ -50,6 +68,12 @@ def embed(texts: list[str], settings: Settings | None = None) -> np.ndarray:
     a similarity printed in the UI is the same number the ranking used.
     """
     resolved = settings or load_settings()
+    if resolved.embedding.model_id != model_id():
+        raise PipelineError(
+            f"the loaded encoder is {model_id()!r} but these settings ask for "
+            f"{resolved.embedding.model_id!r}; the encoder is a process-wide singleton, so it "
+            "cannot be reconfigured per call. Clear src.embedding.get_encoder.cache_clear() first."
+        )
     if not texts:
         return np.zeros((0, EMBED_DIM), dtype="float32")
     vectors = get_encoder().encode(
