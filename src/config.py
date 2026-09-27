@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from functools import lru_cache
@@ -449,3 +450,53 @@ def config_hash(settings: Settings | None = None) -> str:
         _canonical(asdict(resolved)), sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class LlmEnv:
+    """Secrets and machine-specific values read from the environment, then .env (architecture.md §18.2).
+
+    The key is never logged, echoed, or included in any trace. `log_queries` is a local debugging
+    switch and defaults to False, so raw query text stays out of logs by default.
+    """
+
+    api_key: str
+    base_url: str
+    model: str
+    log_queries: bool
+
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    """Read KEY=VALUE pairs from a .env file, ignoring comments and blank lines."""
+    if not path.is_file():
+        return {}
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        values[key.strip()] = value.strip().strip("'\"")
+    return values
+
+
+def load_llm_env(path: Path | str | None = None) -> LlmEnv:
+    """Load LLM settings from the process environment, falling back to the git-ignored .env file.
+
+    The process environment wins so a deployed host can inject secrets without writing a file.
+    """
+    file_values = _parse_env_file(Path(path) if path is not None else REPO_ROOT / ".env")
+
+    def resolve(key: str) -> str:
+        from_env = os.environ.get(key)
+        if from_env is not None and from_env.strip():
+            return from_env.strip()
+        return file_values.get(key, "").strip()
+
+    log_queries = resolve("LOG_QUERIES").lower() in {"1", "true", "yes", "on"}
+    return LlmEnv(
+        api_key=resolve("LLM_API_KEY"),
+        base_url=resolve("LLM_BASE_URL"),
+        model=resolve("LLM_MODEL"),
+        log_queries=log_queries,
+    )

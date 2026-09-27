@@ -1100,7 +1100,7 @@ All knobs live in `config.yaml`; `src/config.py` validates and exposes them. Env
 | Sources panel (UI) | Retrieved chunk text + scores + boost term |
 | Build report | Per-source status, chunk stats, warnings, timings |
 | `data/chunks.jsonl` | Every chunk as stored — inspect any citation's origin without running the app |
-| Stage CLI | `python -m src.chunking --doc S1`, `python -m src.retrieval --query "exit load?"` — each stage runnable in isolation (NFR-9, D2) |
+| Stage CLI | `python -m src.chunking --doc S1`, `python -m src.retrieval --query "exit load?"`, `python -m src.pipeline ask --query "..."` — each stage runnable in isolation (NFR-9, D2). Generation's CLI is the pipeline's `ask` subcommand rather than a module of its own, because answering a query requires classifying and retrieving it, and §5.2 forbids `generation` from importing either |
 
 ### 19.2 Test architecture
 

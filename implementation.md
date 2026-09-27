@@ -814,6 +814,47 @@ Verify: `python -m src.generation --query "What is the exit load on the HDFC fle
 and `python -m pytest -q tests/test_generation.py`. Paste both outputs.
 ```
 
+### Notes (deviations from the phase plan above, and why)
+
+Two items in the plan above were changed on the way through. Both were forced by architecture §5.2,
+which `tests/test_layering.py` enforces, and neither weakens an architecture rule.
+
+1. **The stage-6 CLI is `python -m src.pipeline ask --query "..."`, not
+   `python -m src.generation --query "..."`.** A `src/generation.py` CLI that answers a query has to
+   classify it and retrieve context, which means importing `src.intents` and `src.retrieval`. The
+   layering table allows `generation` to import only infrastructure and corpus modules, and states
+   the reason in terms: "generation must not import retrieval". Wiring stages together is
+   `src/pipeline.py`'s job alone, so `answer()` lives there. Verified: `python -m src.pipeline --help`
+   still lists `build`, `dump`, and `ask`.
+
+2. **`AssembledContext` gained a `context_text: str = ""` field.** The LLM prompt needs the rendered
+   context block, and re-deriving it inside generation would have meant importing `assemble` from the
+   retrieval stage. The assembling stage now renders the block once and carries it on the dataclass,
+   which is the channel §5.1 already prescribes: stages communicate only through `src/models.py`.
+   Retrieval also owns the ordering, dedupe, and token-budget rules, so re-rendering elsewhere risked
+   showing the generator text the budget had excluded.
+
+Extractive-path behaviour worth recording, because both rules were found by testing against the real
+corpus rather than a synthetic chunk:
+
+- Scheme pages arrive from HTML as one table cell per line, so the facts this assistant answers live
+  in a label/value shape: "Expense ratio" and "1.03%" are one answer split across two lines. The
+  composer pairs a short unpunctuated label with the short numeric value beneath it, and rejoins a
+  wrapped sentence when the previous line has no terminal punctuation and the next begins lower-case.
+  Without the pairing, both facts were dropped for being under the sentence-length floor.
+- A sentence is usable only if it repeats one of the fact terms the retrieval stage matched in that
+  chunk. "What is the weather in Mumbai" passes the grounding gate and retrieves HDFC's registered
+  address; the address's digits used to satisfy a value-based score on their own, and the assistant
+  answered a weather question with a postal address. Requiring term coverage at the sentence level,
+  the same rule the gate applies at the chunk level, makes it return `NOT_IN_CORPUS` instead.
+- "Min." is in the abbreviation list because "Min. for SIP" / "₹100" is the minimum-SIP fact; without
+  it the pairing was undone by the sentence splitter and the term-bearing half lost its label.
+
+Also note: the live Groq endpoint returns Cloudflare `403 / error code 1010` from this machine, which
+is a WAF block rather than an auth failure (an invalid key is `401`). The configured model id
+`qwen/qwen3.8-27b` is therefore still unverified. The LLM adapter is tested against a stubbed HTTP
+client, which is the only correct way to test it offline in any case.
+
 ---
 
 ## Phase 8 — Guardrails + answer rendering (stage 7)

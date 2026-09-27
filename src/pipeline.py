@@ -15,17 +15,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from src import chunking, embedding, loading, store
+from src import chunking, embedding, loading, store, templates
 from src.config import Settings, config_hash, load_settings
-from src.models import BuildReport, ChunkRecord, PipelineError
+from src.generation import resolve_generator
+from src.intents import classify, has_pii
+from src.models import BuildReport, ChunkRecord, GateResult, Intent, PipelineError
+from src.retrieval import retrieve
 
 VECTOR_DUMP_WIDTH = 100
 VECTOR_DUMP_TEXT_WIDTH = 86
@@ -238,8 +242,96 @@ def _read_report(settings: Settings) -> dict[str, Any]:
         return {}
 
 
+class _CopyValues(dict):
+    """Mapping that resolves any unknown placeholder to an empty string.
+
+    The user-visible strings in config.yaml carry `{link}` and `{scheme_count}` placeholders for
+    whichever component renders them. The CLI is that component for a terminal session, and printing
+    a raw `{link}` would be worse than printing nothing in its place, so an unknown key resolves to
+    empty rather than raising.
+    """
+
+    def __missing__(self, key: str) -> str:
+        """Return an empty string for a placeholder this renderer does not supply."""
+        return ""
+
+
+def _render_copy(template: str, settings: Settings, **overrides: str) -> str:
+    """Fill a configured copy template with the right registry URL for that message.
+
+    Each message names a different destination, so the caller passes it: an advice refusal links to
+    investor education, a PII refusal to the help centre, and a performance redirect to the
+    factsheet index. That index is deliberately empty (no official factsheet index is fetchable), so
+    the rendered text degrades to a sentence without a link rather than inventing a URL, and a
+    dangling ": ." left by the missing value is collapsed.
+    """
+    values = _CopyValues(
+        link=settings.registry.education_url,
+        help_link=settings.registry.help_url,
+        factsheet_link=settings.registry.factsheet_index_url,
+        scheme_count=len(settings.registry.scheme_aliases),
+        schemes=", ".join(sorted(settings.registry.scheme_aliases)),
+    )
+    values.update(overrides)
+    rendered = template.format_map(values)
+    rendered = re.sub(r"\s*:\s*\.", ".", rendered)
+    return re.sub(r"\s{2,}", " ", rendered).strip()
+
+
+def answer(
+    query: str,
+    provider: str | None = None,
+    settings: Settings | None = None,
+) -> int:
+    """Run the online path for one question and print the draft, returning a process exit code.
+
+    Wiring the stages together is this module's job alone (architecture.md §5.2), which is why the
+    stage-6 CLI lives here rather than in src/generation.py: a generator that imported the intent
+    and retrieval stages to fetch its own context would make the grounding gate depend on the model.
+    """
+    resolved = settings if settings is not None else load_settings()
+    if provider is not None:
+        resolved = replace(
+            resolved, generation=replace(resolved.generation, provider=provider)
+        )
+    if has_pii(query):
+        print(_render_copy(templates.PII_REFUSAL, resolved, link=resolved.registry.help_url))
+        return 1
+    classification = classify(query, resolved)
+    if classification.intent is Intent.PERFORMANCE_REQUEST:
+        redirect = _render_copy(
+            templates.PERFORMANCE_REDIRECT,
+            resolved,
+            link=resolved.registry.factsheet_index_url,
+        )
+        print(f"{classification.intent.value}: {redirect}")
+        return 0
+    if classification.intent is Intent.OUT_OF_CORPUS:
+        print(f"{classification.intent.value}: {_render_copy(templates.OUT_OF_CORPUS_MESSAGE, resolved)}")
+        return 0
+    if classification.intent is Intent.SMALLTALK:
+        print(f"{classification.intent.value}: {_render_copy(templates.SMALLTALK_MESSAGE, resolved)}")
+        return 0
+    if classification.intent is Intent.ADVICE_REQUEST:
+        print(f"{classification.intent.value}: {_render_copy(templates.REFUSAL_MESSAGE, resolved)}")
+        return 0
+    result = retrieve(query, resolved)
+    if isinstance(result, GateResult):
+        print(f"GATE_REJECTED: {result.reason} (top_score={result.top_score:.3f})")
+        return 0
+    generator, provider_name = resolve_generator(resolved)
+    draft = generator.generate(result, query, classification.intent)
+    print(f"provider : {provider_name}")
+    print(f"intent   : {classification.intent.value}")
+    print(f"sentinels: {draft.sentinels or 'none'}")
+    print(f"answer   : {draft.text or '(empty)'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run a pipeline command and print its summary, returning a process exit code."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(
         prog="python -m src.pipeline",
         description="Offline build pipeline for the MF FAQ assistant.",
@@ -255,12 +347,25 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser(
         "dump", help="write every stored chunk and its vector to paths.vectors_dump"
     )
+    answer_parser = subparsers.add_parser(
+        "ask",
+        help="classify, retrieve and generate a draft answer for one question (stage 6 CLI)",
+    )
+    answer_parser.add_argument("--query", required=True, help="the user's question")
+    answer_parser.add_argument(
+        "--provider",
+        choices=("auto", "llm", "extractive"),
+        default=None,
+        help="override config.generation.provider for this run",
+    )
     arguments = parser.parse_args(argv)
     settings = load_settings()
     if arguments.command == "dump":
         path = dump(settings)
         print(f"wrote {path} ({path.stat().st_size / 1024:.0f} KB)")
         return 0
+    if arguments.command == "ask":
+        return answer(arguments.query, arguments.provider, settings)
     if arguments.command != "build":
         parser.error(f"unknown command {arguments.command!r}")
     report = build(refresh=arguments.refresh, rebuild=arguments.rebuild, settings=settings)

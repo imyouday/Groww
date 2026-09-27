@@ -330,6 +330,7 @@ def _run(
         chunks=included,
         total_tokens=trace["context_tokens"],
         top_score=selected[0].final if selected else 0.0,
+        context_text=assemble(included, cfg),
     )
     return context, gate, trace
 

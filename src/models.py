@@ -74,6 +74,10 @@ class ModelNotCachedError(PipelineError):
     """The encoder weights are not on this machine and cannot be fetched."""
 
 
+class GenerationError(PipelineError):
+    """The LLM generator could not produce a draft; guardrails decide how to degrade."""
+
+
 @dataclass(frozen=True)
 class SourceRecord:
     """One registered public source page. Row of data/sources.csv (architecture.md §6.1)."""
@@ -136,7 +140,13 @@ class ScoredChunk:
 
 @dataclass(frozen=True)
 class AssembledContext:
-    """Ordered, deduplicated, budget-capped chunks handed to the generator."""
+    """Ordered, deduplicated, budget-capped chunks handed to the generator.
+
+    `context_text` is the rendered form of `chunks`, produced by the assembling stage. The LLM
+    generator reads it rather than importing the retrieval stage to re-render the block: a stage
+    may not depend on another policy stage (architecture.md §5.2), and re-deriving the block here
+    would duplicate the ordering and token-budget rules that decide which text may be shown.
+    """
 
     query: str
     scheme_id: str | None
@@ -144,6 +154,7 @@ class AssembledContext:
     chunks: list[ScoredChunk]
     total_tokens: int
     top_score: float
+    context_text: str = ""
 
 
 @dataclass(frozen=True)
