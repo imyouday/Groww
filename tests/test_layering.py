@@ -15,7 +15,7 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 
-INFRASTRUCTURE = {"config", "models", "templates", "prompts"}
+INFRASTRUCTURE = {"config", "models", "templates", "prompts", "theme"}
 # The corpus pipeline runs in one direction: the registry lists the sources, pii scrubs them,
 # and each later stage consumes the artefacts of the previous one. Naming the permitted
 # predecessor per module is stricter than a blanket "any corpus module" rule, which would let
@@ -39,7 +39,8 @@ ALLOWED: dict[str, set[str]] = {
     # generation must not import retrieval, and guardrails must not import either.
     "retrieval": INFRASTRUCTURE | CORPUS | {"intents"},
     "pipeline": INFRASTRUCTURE | CORPUS | POLICY,
-    "app": {"pipeline", "config", "models", "templates"},
+    # theme is design-token data and CSS generation: no retrieval, no prompting, no model.
+    "app": {"pipeline", "config", "models", "templates", "theme"},
 }
 
 MANDATORY_RULES: list[tuple[str, str, str]] = [

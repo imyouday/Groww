@@ -1027,8 +1027,25 @@ Streamlit chat_input
 | Sidebar | Pipeline stats: pages, chunks, median tokens, model id, collection name, generator in use, last build report + warnings | PRD NFR-8 |
 | Footer | Short disclaimer repeat + "Verify on the linked official source" | |
 | Control | "Clear chat" (FR-42) | |
+| Theme control | `st.sidebar.toggle` switching `src.theme` light ⇄ dark (§16.1) | Default light; label names the theme it switches to |
 
 **Separation of concerns:** the UI holds no retrieval or prompt logic. It calls `pipeline.answer()` and renders an `Answer`. This keeps the demo narrative honest — what you see in the UI is exactly what the library returns, and the same call path is exercised by `eval/run_eval.py`.
+
+### 16.1 Theme: light and dark, switchable at runtime
+
+Two Stitch design directions were supplied for this phase — **Groww FinTech Clean** (light, primary `#006c4f`) and **Obsidian Teal Wealth** (dark, primary `#44edb7`). They share an identical token schema (47 colour tokens, 11 type roles, 5 radii under the same names), so a theme is a value substitution rather than a second design. Both are carried; light is the default because the demo presents itself as a Groww page, and Groww's own site is light.
+
+**A live toggle cannot use `.streamlit/config.toml`.** Streamlit reads that theme once at process start, so changing it requires a restart, which is not a toggle. The switch therefore works by CSS: `src/theme.py` holds the two palettes as frozen data and `stylesheet()` emits them as custom properties that `app.py` injects with `st.markdown(..., unsafe_allow_html=True)` on every rerun, keyed off a `st.session_state` value. Both themes are emitted inside `prefers-color-scheme` blocks *and* the active one is applied unconditionally — the media query keeps the page honest when the OS flips while the app is open, and the unconditional rule is what makes the in-app control authoritative rather than advisory.
+
+`src/theme.py` exists as a module rather than living in `app.py` because of the import rule in this section: `app.py` may import `src.pipeline`, `src.config`, `src.models` and `src.templates`, so a palette defined in the UI would be unreachable to the tests that need to assert it. `theme` is therefore declared as infrastructure — it holds design tokens and CSS strings, and imports no stage, no store and no model.
+
+Three deliberate constraints on the token set, each a bug found while building it:
+
+- **Only colour switches.** Type scale, radii and spacing are shared, so the toggle cannot reflow the layout and there is no second responsive surface to test. Two Stitch spacings differ between the directions (`space-md` 0.75 → 1rem, `space-lg` 1 → 1.5rem); the tighter light values are used for both.
+- **Both palettes define every token.** `test_both_palettes_define_every_token_exactly_once` exists because a missing key in one palette would silently drop a colour rather than fail.
+- **A junk preference resolves instead of raising.** `resolve_theme()` coerces `None`, stray strings and wrong types to the default, since the value comes back from `st.session_state` and a stale entry must not take the app down on rerun.
+
+`.streamlit/config.toml` is still worth writing, from `base_config()`, for one reason only: it sets the background before any script runs, so the first paint does not flash the wrong colour on a projector. The toggle does not read it.
 
 ---
 

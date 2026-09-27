@@ -1007,6 +1007,7 @@ Paste the output.
   - `st.expander("Sources used (N chunks · top score X)")` listing scheme, section, score, matched boost term, and the chunk text per `Answer.retrieved`
   - sidebar: `store.stats()`, chunk stats from `data/build_report.json`, the active generator from `resolve_generator()`, and build warnings
   - "Clear chat" button clearing `st.session_state`
+  - sidebar theme toggle: `st.sidebar.toggle(theme.toggle_label(current))` driving `src.theme.stylesheet()`, injected each rerun (§16.1). `src/theme.py` and `tests/test_theme.py` are already built; Phase 10 only wires the control
   - disclaimer in the footer
 - [ ] Guard the UI: if `store.stats()["count"] == 0`, show the actionable "run `python -m src.pipeline build`" panel and skip the chat.
 - [ ] Per `NFR-2`: the sidebar shows the index/model state so the audience knows the app is pre-warmed, not slow.
@@ -1014,7 +1015,7 @@ Paste the output.
 - [ ] Manually verify cold start and first-answer latency on the demo laptop; record both numbers.
 
 ### Files
-`app.py`, `tests/test_ui_smoke.py`
+`app.py`, `tests/test_ui_smoke.py` (both pre-existing: `src/theme.py` and `tests/test_theme.py` were built ahead of this phase because they are independent of every other stage — see §16.1)
 
 ### Verify
 ```
@@ -1030,6 +1031,7 @@ python -m pytest -q tests/test_ui_smoke.py
 - [ ] Refusals show the educational link; the PAN probe is refused and not echoed
 - [ ] Sources panel shows real chunks and scores
 - [ ] Cold start < 10 s, first answer < 6 s (measured)
+- [ ] Theme toggle switches light/dark without losing the transcript, in both directions
 - [ ] Commit `Phase 10: Streamlit UI`
 
 ### Watch out
