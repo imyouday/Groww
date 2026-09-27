@@ -405,6 +405,10 @@ Design rationale and rejected alternatives are in `PRD.md` §9.3; this section i
 
 Token counts use **the embedding model's own tokenizer** (`AutoTokenizer.from_pretrained(MODEL_ID)`), not `tiktoken`. Reason: `min_tokens`/`max_tokens` bounds and the embedding input must be measured in the same unit the encoder uses; using an unrelated tokenizer makes the bounds advisory rather than real (D3).
 
+The bound is then clamped to **what the model will actually accept**, which is not what the tokenizer advertises. `all-MiniLM-L6-v2` ships a 512-token tokenizer but its `sentence_bert_config.json` sets `max_seq_length` to **256**, and `sentence-transformers` truncates there. `model_token_ceiling()` reads that one JSON file (no model load) and the effective text bound is `min(config.max_tokens, 256 - 2) = 254`. The two special tokens are subtracted because the encoder adds them inside the limit.
+
+This is not a detail: clamping to the tokenizer's 512 produced 510-token chunks whose second half the encoder discarded, so the stored text was not the embedded text. The corpus first chunked to 68 pieces that way and to 106 with the correct ceiling. `chunking.max_tokens=600` stays in `config.yaml` as the requested value; the clamp is logged as a warning so the discrepancy is visible rather than silent.
+
 ### 8.3 Algorithm
 
 ```
@@ -415,18 +419,22 @@ for sec in sections:
     if drop_boilerplate(sec): continue
 
     units = split_into_units(sec)          # §8.4
-    body_units, overlap_tail = [], []
+    body_units = []
     for unit in units:
-        if est_tokens(body_units + [unit]) > max_tokens:
-            out.append(make_chunk(body_units, sec, len(out)))   # flush
-            body_units = tail_for_overlap(body_units)            # only if unit is prose
+        if tokens(body_units) + tokens(unit) > max_tokens:
+            out.append(make_chunk(body_units, sec, len(out)))       # flush
+            body_units = seed_overlap(body_units, unit)             # only if sec_type is prose
         body_units.append(unit)
     if body_units: out.append(make_chunk(body_units, sec, len(out)))
+    # a section that produced more than one chunk drops any draft below MIN_CHUNK_TOKENS;
+    # a section that produced exactly one keeps it, however short (§8.7)
 
 if merge_small_sections:
-    out = merge_under_min_tokens(out)      # absorb into next sibling in the same doc; keep both headers
+    out = merge_small_sections(out)        # absorb into a same-type sibling; keep both headings
 return dedupe_by_hash(out)
 ```
+
+`seed_overlap` is `tail_for_overlap` **plus a trim**: after a flush the tail is dropped from its oldest unit until the incoming unit fits inside `max_tokens`. Without the trim, seeding a 254-token unit with a 41-token tail and then appending the unit produced a 295-token chunk followed by a 361-token chunk — the bound was tested before the flush and never tested again. The trim sacrifices the older half of the tail, because the tail exists to carry the sentence immediately before the boundary.
 
 `make_chunk` composes:
 
@@ -448,25 +456,59 @@ chunk_id   = sha1(f"{source_id}|{section_heading}|{ordinal}")[:16]
 | Numbered/bulleted list | Group consecutive items |
 | Prose paragraph | Paragraph is the atomic unit; split at sentence boundary only if a single paragraph alone exceeds `max_tokens` |
 
+A label line is at most `LABEL_MAX_WORDS = 5` words. A label is a noun phrase, not a clause: at eight words "Mr. Dhruv has done B.Com, CA and CFA" was read as the label of the line below it, which left "Education" as a chunk holding one word and pushed the qualification away from the label it belongs to.
+
+Prose is split **losslessly at sentence boundaries, with abbreviations respected**. `Mr.` and `B.` are not sentence ends, so "Mr. Dhruv has done B.Com, CA and CFA" stays one piece; the naive split rewrote the manager's qualification as two fragments in the stored text. If even one sentence exceeds the whole budget, word splitting is the last resort. An earlier version stopped packing once the budget was reached and silently discarded the rest of the paragraph — six of thirteen sentences of S1's mandate were lost while every count and median still looked healthy. `test_no_kept_section_body_is_lost_on_the_real_corpus` is the regression test: every word of every kept section body must appear in some chunk.
+
 `classify_section` maps heading text → `SectionType` via keyword sets:
-- `FEES`: expense, ratio, fee, charge, load, ter, aum, minimum, sip, amount, nav
+- `FEES`: expense, ratio, fee, charge, load, ter, aum, minimum, sip, amount
 - `LOCK_IN`: lock, 80c, tax saver, elss, holding period
 - `RISK`: riskometer, benchmark, risk, objective, horizon, category, portfolio
 - `TAX`: statement, tax, capital gain, report, download, how to
 - `GENERAL`: everything else
 
-`SectionType` drives (a) overlap suppression, (b) the `+0.03` metadata match boost at retrieval (§11.4), (c) the UI's section label.
+Keywords are checked heading-first and the family order is `TAX` → `LOCK_IN` → `RISK` → `FEES` → `GENERAL`, so an ELSS tax section is not read as a fee section. `nav` is deliberately absent: the loader already removes NAV, and a heading that says "nav" is chrome, not a fact.
+
+`SectionType` drives (a) overlap suppression, (b) the `+0.03` metadata match boost at retrieval (§11.4), (c) the UI's section label. On the current corpus the mix is 79 `FEES` / 17 `TAX` / 5 `RISK` / 5 `GENERAL`, so the §11.4 boost discriminates weakly and is kept only because it costs nothing; it is a candidate for removal if the eval shows no gain.
 
 ### 8.5 Boilerplate filter
 
-Drop a section (or a paragraph) when it matches any of:
+Drop a section when it matches any of:
 - a curated stop-phrase list (`"disclaimer"`, `"mutual fund investments are subject to market risks"`, `"read more"`, `"know more"`, `"download app"`, `"log in"`, `"sign up"`, cookie/SEO text),
-- < 25 tokens **and** no digits **and** no `SectionType.FEES/LOCK_IN` classification,
-- link-density > 0.6 in a block of 5 lines.
+- a chrome heading (`disclosures`, `terms and conditions`, `privacy policy`, `about us`, `contact us`, `our offices`, `references`, `appendix`, …) — a substring test on wording misses reformatted promo text, a heading is stable,
+- < 25 tokens **and** no digits **and** no `FEES`/`LOCK_IN` classification. Both conditions are required: "Rs 100" is a fact in three words.
+
+Link density is **not** a chunking rule. It is enforced in the loader (§7.4), where the surrounding markup is still available; by the time a section is split into units, a line of text that was 80% links has already been separated from its links. Recorded here because §8.5 in earlier drafts claimed it.
 
 ### 8.6 Emitted statistics (feeds PRD §11.3 ablation A1)
 
-`BuildReport.chunk_stats = {count, median_tokens, p10, p90, by_section_type: {…}, dropped_sections, merged_chunks}` — printed to console and exposed in the UI sidebar.
+`chunk_stats(chunks) = {count, median_tokens, p10_tokens, p90_tokens, max_tokens, by_section_type: {…}}`; `chunk_document_with_stats` adds `{dropped_sections, merged_chunks, deduped_chunks, dropped_fragments}` for the same document. All are printed by `python -m src.chunking` and folded into `BuildReport` for the UI sidebar. The per-document counters exist because a chunk count alone hides a misfire: a corpus reaches a healthy median while the chunker has deleted the tax sections as boilerplate or shredded every fee table.
+
+Measured on the committed corpus, `max_tokens=254`, `overlap_tokens=60`:
+
+| Variant | Requested | Effective | Chunks | Median | p10 | p90 | Max | `by_section_type` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| configured `semantic_section` | 600 | 254 | 106 | 229 | 38 | 252 | 254 | 79 fees / 17 tax / 5 risk / 5 general |
+| `--variant semantic_150` | 150 | 150 | 162 | 137 | 41 | 149 | 150 | 125 fees / 22 tax / 9 risk / 6 general |
+| `--variant semantic_350` | 350 | 254 | 106 | 229 | 38 | 252 | 254 | identical to configured |
+| `--variant semantic_600` | 600 | 254 | 106 | 229 | 38 | 252 | 254 | identical to configured |
+| `--variant fixed_512` | 512 | 254 | 94 | 244 | 224 | 253 | 254 | 94 general, no section labels |
+
+`semantic_350` and `semantic_600` are the same run, because both exceed the model's 256 ceiling. implementation.md names those three variants, so the names are kept; `semantic_150` was added because a sweep whose arms are all clamped to the same value measures nothing. The configured strategy stays at `max_tokens=600` clamped to 254, which lands inside the PRD's 80–400 chunk / 150–450 median target — 68 chunks, just under the floor, was the *clamped-to-512* artefact, not a real operating point.
+
+`fixed_512` is the rejected baseline kept for the ablation: 12 fewer chunks, a median of 244 against 229, every chunk labelled `general` with the heading `Overview`, and holdings tables cut without a repeated header, so a fee question retrieves a chunk of stock names.
+
+### 8.7 Merge and fragment rules
+
+`merge_small_sections` absorbs a draft below `min_tokens` into a **previous sibling of the same `SectionType`**, keeping both headings joined with `" / "`, and refuses three ways:
+
+1. **Different `SectionType`.** On S1 a 12-token "Exit load" chunk, a 4-token "Stamp duty" chunk and a 48-token "Tax implication" chunk sit next to a 94-token fund-manager bio; a positional merge packs the manager into a tax chunk.
+2. **A table on exactly one side.** Appending "Min. for SIP: Rs 100" to the tail of a 350-token holdings table produces a chunk that spends its budget on 50 stock names and answers the fee question from its last line.
+3. **Over `max_tokens`.** A truncated fee block looks complete and is not.
+
+A small draft that survives all three is left alone: it is still retrievable, and a wrongly themed chunk is worse. Both headings are kept on a merge so the chunk's own name still says what it covers.
+
+A section that yields exactly one draft keeps it whatever its length, because it *is* the section — S3's exit load is the two words "Exit load" and "Nil", and a floor applied to every chunk deleted that fact. `MIN_CHUNK_TOKENS = 4` applies only to sections that split, where a below-floor draft is the residue of a mis-paired label and costs a slot in the top-k budget to say nothing.
 
 ---
 
