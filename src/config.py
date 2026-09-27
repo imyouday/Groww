@@ -47,6 +47,7 @@ class PathsSettings:
     processed_dir: str
     chroma_dir: str
     chunks_dump: str
+    vectors_dump: str
     sources_csv: str
     model_cache_dir: str
 
@@ -79,6 +80,7 @@ class ChunkingSettings:
 class ChromaSettings:
     collection_name: str
     space: str
+    description: str
 
 
 @dataclass(frozen=True)

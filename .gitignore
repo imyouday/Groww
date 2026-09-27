@@ -16,6 +16,12 @@ __pycache__/
 data/chroma/
 data/models/
 data/chunks.jsonl
+# Human-readable chunk + vector dump for inspection; regenerate from the store at any time.
+data/chunks_and_vectors.txt
+# Run record: carries a timestamp and a duration, so committing it would dirty the tree on every
+# build. Reproducibility is anchored on data/raw/ and data/processed/ (committed) plus the
+# config_hash and corpus_hash this file records.
+data/build_report.json
 
 # Phase 0 spike scratch: 3.3 MB of throwaway HTML/text for candidate URLs, most of them rejected.
 # docs/corpus_matrix.md records the findings; Phase 3 re-fetches the 5 accepted sources into

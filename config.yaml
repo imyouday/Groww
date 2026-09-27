@@ -7,6 +7,7 @@ paths:
   processed_dir: data/processed
   chroma_dir: data/chroma
   chunks_dump: data/chunks.jsonl
+  vectors_dump: data/chunks_and_vectors.txt
   sources_csv: data/sources.csv
   model_cache_dir: data/models
 
@@ -29,6 +30,7 @@ chunking:
 chroma:
   collection_name: mf_faq_hdfc_v1
   space: cosine
+  description: HDFC AMC MF FAQ facts v1
 
 retrieval:
   dense_k: 12

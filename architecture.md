@@ -542,10 +542,10 @@ def embed(texts: list[str]) -> np.ndarray:
 | Dimensions | 384 |
 | Pooling | mean pooling (library default for this checkpoint) + L2 norm |
 | Similarity | cosine |
-| Corpus size | ~120–400 chunks → full-corpus embed ≈ 2–6 s on CPU; **never on the request path** |
-| Query embed | ~15–40 ms (one string) |
+| Corpus size | ~120–400 chunks → full-corpus embed ≈ 15 s for 106 chunks on CPU (measured, Phase 5); **never on the request path** |
+| Query embed | ~15–40 ms (one string, warm) |
 
-**Pre-warm:** `app.py` calls `get_encoder()` and `store.connect()` in a `@st.cache_resource` block, so the ~1–3 s model load happens before the first question (NFR-2).
+**Pre-warm:** `app.py` calls `get_encoder()`, one `embed()` call and `store.connect()` in a `@st.cache_resource` block, so the model load happens before the first question (NFR-2). The `embed()` call is not optional: measured in Phase 5, `get_encoder()` costs ~6 s and the *first* `embed()` still costs ~4.7 s more on its own (tokenizer and torch thread-pool initialisation), while every later single-string embed is 20–35 ms. A pre-warm that only loads the model leaves ~4.7 s sitting on the first user question.
 
 ---
 
@@ -555,15 +555,26 @@ def embed(texts: list[str]) -> np.ndarray:
 
 ```python
 # src/store.py
-client = chromadb.PersistentClient(path=str(settings.chroma_dir))
+client = chromadb.PersistentClient(
+    path=str(settings.paths.chroma_dir),
+    settings=chromadb.config.Settings(
+        anonymized_telemetry=False,
+        chroma_product_telemetry_impl="src.store.NoTelemetry",
+    ),
+)
 collection = client.get_or_create_collection(
     name=settings.chroma.collection_name,            # "mf_faq_hdfc_v1"
-    configuration={"hnsw": {"space": "cosine"}},     # chromadb >= 0.5
-    metadata={"hnsw:space": "cosine", "description": "HDFC AMC MF FAQ facts v1"},
+    configuration=CollectionConfigurationInternal(
+        parameters=[ConfigurationParameter(name="hnsw_configuration", value=HNSWConfigurationInternal(
+            parameters=[ConfigurationParameter(name="space", value=settings.chroma.space)]))]
+    ),
+    metadata={"description": settings.chroma.description},   # "HDFC AMC MF FAQ facts v1"
 )
 ```
 
-> **Compatibility note:** chromadb < 0.5 uses `metadata={"hnsw:space": "cosine"}` instead of `configuration=…`. The loader detects the installed version and passes the right kwarg — pinned in `requirements.txt` (`chromadb==0.5.x`) so this is belt-and-braces (R10).
+> **Compatibility note (measured, Phase 5):** the pinned `chromadb==0.5.23` does **not** accept the `configuration={"hnsw": {"space": "cosine"}}` mapping written here before the phase, nor the public `CollectionConfiguration` interface — the mapping has no `to_json`, and the interface serialises as `CollectionConfigurationInterface`, which 0.5.23's own `from_json` then refuses. Only the *internal* typed classes work. chromadb < 0.5 uses `metadata={"hnsw:space": "cosine"}` instead of `configuration=…`. `store.collection_configuration()` branches on the parsed version and the probe result (R10).
+
+> **Telemetry note (measured, Phase 5):** `anonymized_telemetry=False` alone is *not* sufficient on 0.5.23. `Posthog` is still constructed, its `capture(user_id, name, properties)` call does not match the installed posthog signature, and `_direct_capture` logs `Failed to send telemetry event …` on **every** client creation. Because a demo whose start-up prints telemetry failures fails NFR-7 outright, `src/store.py` defines `NoTelemetry(chromadb.config.Component)` — a component whose `capture()` returns `None` — and names it in `chroma_product_telemetry_impl`. It extends `Component` rather than `ProductTelemetryClient` because the latter is enforced by the `overrides` package, which would make this module import a package that is only chromadb's own dependency.
 
 ### 10.2 Stored metadata per chunk
 
@@ -579,17 +590,23 @@ collection = client.get_or_create_collection(
 | `title` | str | citation label |
 | `fetched_at` | str | `Last updated from sources:` stamp (C6) |
 | `ordinal` | int | stable chunk identity across rebuilds |
+| `token_count` | int | context-budget arithmetic in retrieval (D4) |
 
 Full body text lives in Chroma's document field; `data/chunks.jsonl` is the human-readable mirror for debugging and for the eval harness (avoids a DB read in offline evaluation).
+
+`section_type` is stored as the enum's *string value*, never its `repr`, so a rename cannot silently change what is on disk. `embed_text` is **not** stored: it is derived on read as `f"[{scheme_name}] {section}\n{document}"`, which is exactly §8.3's construction, so the store holds the body once and the header once rather than twice. Every value is a `str` or `int` — Chroma rejects `None`, and a single `None` fails the whole upsert, which is why the coercion lives in one function, `store.metadata_for()`.
 
 ### 10.3 Write path
 
 ```
 chunk_id = sha1(source_id|section|ordinal)            # deterministic ⇒ idempotent (FR-17)
 collection.upsert(ids=[...], embeddings=vecs.tolist(), documents=texts, metadatas=[...])
+collection.delete(ids=[ids no longer produced by the corpus])
 ```
 
 Rebuild command `python -m src.pipeline build --rebuild` deletes the collection and recreates it from `data/processed/` — no refetch (snapshot is authoritative), which is what makes M8's fresh-clone rehearsal fast and reliable.
+
+The delete step is not a nicety. A deterministic `chunk_id` makes a *repeat* build idempotent, but it makes a *changed* build cumulative: if a source is dropped or a section splits differently, the ids that no longer exist stay in the collection, `count()` outruns the real chunk count, and retrieval serves text that is not in `data/chunks.jsonl`. `store.delete_missing()` closes that gap, and `build()` calls it after every upsert so a plain `build` is always exact.
 
 ### 10.4 Query path
 
@@ -598,11 +615,14 @@ res = collection.query(
     query_embeddings=[qvec.tolist()],
     n_results=settings.retrieval.dense_k,          # 12
     where={"scheme_id": scheme_id} if scheme_id else None,
-    include=["documents", "metadatas", "distances"],
+    include=["documents", "metadatas", "embeddings"],
 )
+similarity = min(1.0, max(0.0, float(stored_embedding @ qvec)))
 ```
 
-Chroma returns cosine **distance**; converted to similarity as `similarity = 1 - distance` and clamped to `[0, 1]`. This is the value carried in `ScoredChunk.dense` and displayed in the UI.
+> **Similarity note (measured, Phase 5):** this section previously converted Chroma's distance as `similarity = 1 - distance`, and that is **wrong for `chromadb==0.5.23`**. Its `cosine` space returns `2 - 2·cos` — the squared L2 distance of the two unit vectors — so a self-match is `0.0`, an orthogonal pair is `2.0`, and a typical matched pair around `cos = 0.45` reports `1.03`. `1 - distance` therefore clamps to `0.0` for essentially every hit, which is exactly what the first Phase 5 build did: a correct ranking behind a column of zeros. The score is now recomputed as the dot product of the query with each returned candidate's stored vector and clamped to `[0, 1]`. §9 already guarantees both operands are L2-normalised unit vectors, so the dot product *is* the cosine similarity, exactly, and the conversion no longer depends on which of chroma's two cosine conventions the installed version uses. HNSW still selects the candidate set; only a candidate's score is recomputed, which is what makes the percentage shown in the UI trustworthy. `tests/test_store.py` pins this with a self-match of 1.0 *and* an orthogonal pair of 0.0 — a self-match alone would also pass under `1 - distance`.
+
+Calibration for the §12 gate, measured on the Phase 5 index (106 chunks, MiniLM-L6-v2, CPU): strong matches (`what is the minimum amount for a monthly SIP` → *Minimum investments / Exit load*) score **≈ 0.48**, weak ones (`is there an exit load` → same chunk) **≈ 0.16**, and unrelated ones **≈ 0.03**. Short FAQ chunks against short questions produce low absolute cosines, so `retrieval.gate_threshold` must be set from this distribution rather than from intuition about cosine similarity. The configured `0.35` does fall between the strong and weak bands, but it sits only 0.13 below a strong match, so Phase 6 should re-measure it over the eval set (M-series) before treating it as settled.
 
 ### 10.5 Why Chroma (D7 rationale)
 
@@ -869,13 +889,18 @@ registry.load_sources()
    ├─▶ loading.load_all()      ──▶ data/raw/*, data/processed/*
    │        └─ pii.redact, assert_fact_coverage
    ├─▶ chunking.chunk_all()   ──▶ data/chunks.jsonl  (+ ChunkStats)
-   ├─▶ embedding.embed_batch()──▶ np.ndarray (n, 384)
-   ├─▶ store.upsert_all()     ──▶ data/chroma (collection mf_faq_hdfc_v1)
-   └─▶ BuildReport { sources_ok, sources_failed, chunks, stats, warnings, duration }
-            └─▶ prints summary; warnings surfaced in UI sidebar
+   ├─▶ embedding.embed()      ──▶ np.ndarray (n, 384)
+   ├─▶ store.upsert_chunks()  ──▶ data/chroma (collection mf_faq_hdfc_v1)
+   └─▶ BuildReport { sources_ok, sources_failed, chunk_count, chunk_stats, warnings,
+                     duration_s, config_hash, corpus_hash }
+            └─▶ data/build_report.json; prints the summary; warnings surfaced in UI sidebar
 ```
 
-Total expected runtime: < 60 s on CPU for 5 pages (network fetch dominates).
+Measured on the Phase 5 corpus (5 pages, 106 chunks, CPU): **39 s** of build work, 61 s of wall clock including ~21 s of `torch`/`chromadb` import. A build without `--refresh` opens no socket at all — verified by running it with `socket.create_connection` and `httpx.Client` replaced by raising stubs — because `loading.load_all` reuses `data/raw/` and never constructs a client. `--rebuild` deletes and recreates the collection and reproduces an identical `chunk_count` and `corpus_hash` (`924af25c…` for this corpus), which is the DoD check for FR-17 rather than a claim about it.
+
+`corpus_hash` is sha256 over `f"{chunk_id}:{sha256(embed_text)}"` lines sorted by that string, so it moves when either the chunking output or the source text moves, and is independent of the order the sources happened to load in.
+
+**Inspection command.** `python -m src.pipeline dump` writes `data/chunks_and_vectors.txt`: every chunk with its scheme, section, token count, URL, `fetched_at`, full `embed_text`, body text and all 384 vector components, under a header carrying `config_hash`, `corpus_hash` and `built_at`. The vectors are read back **out of** Chroma rather than recomputed, and the dump aborts if a stored document differs from `data/chunks.jsonl` — so the file is evidence of what the store holds, and a drifted index is a loud failure rather than a dump that quietly agrees with itself. This is the artefact to open when a citation looks wrong (P3, §19.1).
 
 ### 15.2 Online query — factual path
 
@@ -1013,6 +1038,7 @@ paths:
   processed_dir: data/processed
   chroma_dir: data/chroma
   chunks_dump: data/chunks.jsonl
+  vectors_dump: data/chunks_and_vectors.txt   # `pipeline dump` output; git-ignored, regenerable
   sources_csv: data/sources.csv
   model_cache_dir: data/models
 
@@ -1035,6 +1061,7 @@ chunking:
 chroma:
   collection_name: mf_faq_hdfc_v1
   space: cosine
+  description: HDFC AMC MF FAQ facts v1   # collection metadata, so a human opening the store knows what it is
 
 retrieval:
   dense_k: 12
