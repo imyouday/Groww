@@ -25,7 +25,7 @@ These are the rules that keep `architecture.md` enforceable rather than aspirati
 - `src/loading.py`, `src/chunking.py`, `src/embedding.py`, `src/store.py` must NOT import
   `src/intents.py`, `src/retrieval.py`, `src/generation.py`, `src/guardrails.py`.
 - `src/pipeline.py` is the only module that wires stages together.
-- `app.py` may import only `src.pipeline`, `src.config`, `src.models`, `src.templates`.
+- `app.py` may import only `src.pipeline`, `src.config`, `src.models`, `src.templates`, `src.theme`.
 
 ## Safety invariants (never weaken; add a test when you touch these)
 - The system never returns a citation URL that is not in `data/sources.csv`.

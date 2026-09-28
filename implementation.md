@@ -123,7 +123,7 @@ Total ≈ 25 h ≈ 4–5 working days for two people. Phases 0–5 are the *offl
 | 9 End-to-end | ☑ | this commit | tests/test_pipeline_e2e.py | 24/24 golden, 8/8 probes, p95 50ms |
 | 10 UI | ☑ | 1e7a094 | tests/test_ui_smoke.py, tests/test_theme.py | app.py + pipeline warm_index; 3 chips, 1 link, theme toggle |
 | 11 Eval | ☑ | this commit | tests/test_eval.py, eval/report.md | 8/8 metrics pass both providers; τ band (0.8165, 0.8402] is off-grid, so 0.35 stays; A1 chunking worth ~21 pts; A4's 429s absorbed |
-| 12 Deliverables | ☐ | | | |
+| 12 Deliverables | ☑ | this commit | README acceptance table | 11/12 PRD 16 criteria met; criterion 1 partial (5 of 7 families in corpus, Phase 0 finding) |
 | 13 Rehearsal | ☐ | | | |
 
 ---
@@ -1341,6 +1341,39 @@ python -m pytest -q tests/test_eval.py
   rehearsed on extractive.
 - Suite after this phase: **569 passed**. Layering and `python -m src.pipeline --help` intact.
 
+### Results
+- All five deliverables written: `README.md` (267 lines), `docs/sources.md` (39), `docs/sample_qa.md`
+  (90), `docs/demo_script.md` (108), `AGENTS.md` (49, corrected — see below).
+- `docs/sample_qa.md` is **generated**, not composed: a throwaway script (kept in the temp dir, not
+  the repo, since Phase 12 did not ask for a generator file) runs `pipeline.answer()` and writes the
+  document. All ten pairs land on their expected `kind`. It shows five fact families, an advice
+  refusal, a performance redirect, a PII refusal, an out-of-scheme question, and one well-formed
+  question the corpus cannot answer.
+- The "which fact families this source backs" column in `docs/sources.md` is **derived by asking the
+  grounding gate**, not by grepping chunks. A substring scan matched exit-load vocabulary inside S3
+  chunks that contain neither the word *exit* nor the word *load*: the gate is stricter because it
+  needs the term inside a labelled fact unit. The gate's own verdict gives 24/25 pairs, which
+  independently reproduces the 24-row golden set.
+- Two numbers in the draft README were wrong and were corrected against the committed
+  `eval/report.md`: the LLM latency (805 ms / 1804 ms p95, not 788/940 — the earlier figures came
+  from a run that was discarded when the stale A4 table was removed) and the cold start.
+- **Cold start was re-measured rather than copied.** Phase 10 recorded 5.4 s, which is
+  `warm_index()` on its *second* call in a process. A demo machine starting cold actually pays
+  **10.5 s**, of which 4.4 s is `warm_index()` and the rest is importing `sentence_transformers` and
+  `torch`; a repeat `warm_index()` is 0.02 s, the first answer after warm-up is 102 ms, and
+  steady-state is 38 ms. The README now states which measurement is which.
+- The rebuild run to verify the README's setup command reproduced `corpus_hash` `924af25c…`
+  **exactly**, which is the reproducibility claim in its strongest form: same committed snapshots,
+  same 106 chunks, same content hash. `config_hash` moved to `75ee0d1fb6b6…` because Phase 10 added
+  the `ui:` block, which cannot affect the index.
+- `AGENTS.md` was stale: it listed four modules `app.py` may import, but Phase 10 added `src/theme.py`
+  and the app imports it. Corrected, and `tests/test_layering.py` agrees.
+- **PRD §16 acceptance: 11 of 12 criteria met, 1 partial.** The exception is criterion 1, "all 7 fact
+  families for all 5 schemes". The corpus supports 5 of the 7; lock-in period and statements have no
+  public source among the five pages, which the Phase 0 spike recorded before any code was written.
+  The README states this as a partial rather than quietly reporting 5/5 as if it were 7/7.
+- Suite unchanged at **569 passed** (documentation only, plus the `AGENTS.md` correction).
+
 ### Watch out
 - Ablation A1 rebuilds the index per variant — expect ~1 min per variant. Don't leave a stale `data/chroma` from a previous variant, or the numbers are meaningless. `reset()` before each rebuild.
 - A2 must use the labelled procedure in `ARCH` §12 (record `s_i` and `t_i`, then sweep). A "we tried 0.3 and 0.4 and 0.3 felt better" is not a calibration.
@@ -1398,7 +1431,7 @@ value and note the justification in eval/report.md — but never relax the gate 
 **Depends on:** Phases 10, 11. **Estimate:** 2 h. **Refs:** PRD §13, §17, §18.
 
 ### Do
-- [ ] `README.md`:
+- [x] `README.md`:
   - one-command setup (`pip install -r requirements.txt`, `python -m src.pipeline build`, `streamlit run app.py`)
   - optional `.env` for the LLM; state clearly that the demo works **without** it
   - scope: HDFC AMC + the 5 schemes + the fact families
@@ -1408,11 +1441,11 @@ value and note the justification in eval/report.md — but never relax the gate 
   - reproducibility: pinned versions, `config_hash`, `corpus_hash`, fetch dates
   - measured cold-start and latency numbers
   - troubleshooting table (empty index, no LLM key, offline model cache, chroma version mismatch)
-- [ ] `docs/sources.md` — the MD twin of `data/sources.csv`: source list with scheme, type, publisher, URL, `fetched_at`, and a "which fact families this source backs" column.
-- [ ] `docs/sample_qa.md` — **8–10** real Q&A pairs generated by actually running the app: question, the assistant's verbatim answer, the citation link, `Last updated from sources`, and the `kind`. Include at least 2 refusals, 1 performance redirect, and 1 PII refusal so the safety behaviour is visible in the deliverable.
-- [ ] `docs/demo_script.md` — the timed ≤3-minute script from `PRD.md` §14, with the exact questions to type, the expected answer, and what to point at on screen (sources panel, eval table, ablation A1 result).
-- [ ] `AGENTS.md` — the conventions block from §0.3.
-- [ ] Verify every PRD §16 acceptance checkbox by hand and tick it in the README's "Acceptance" section.
+- [x] `docs/sources.md` — the MD twin of `data/sources.csv`: source list with scheme, type, publisher, URL, `fetched_at`, and a "which fact families this source backs" column.
+- [x] `docs/sample_qa.md` — **8–10** real Q&A pairs generated by actually running the app: question, the assistant's verbatim answer, the citation link, `Last updated from sources`, and the `kind`. Include at least 2 refusals, 1 performance redirect, and 1 PII refusal so the safety behaviour is visible in the deliverable.
+- [x] `docs/demo_script.md` — the timed ≤3-minute script from `PRD.md` §14, with the exact questions to type, the expected answer, and what to point at on screen (sources panel, eval table, ablation A1 result).
+- [x] `AGENTS.md` — the conventions block from §0.3.
+- [x] Verify every PRD §16 acceptance checkbox by hand and tick it in the README's "Acceptance" section.
 - [ ] Commit.
 
 ### Files
@@ -1427,10 +1460,10 @@ python eval/run_eval.py --mode metrics
 ```
 
 ### DoD
-- [ ] All 5 brief deliverables exist and match `PRD.md` §17
-- [ ] Every setup command in the README was executed verbatim by someone other than the author
-- [ ] `docs/sample_qa.md` answers are verbatim app output, not written by hand
-- [ ] All PRD §16 boxes ticked with evidence
+- [x] All 5 brief deliverables exist and match `PRD.md` §17
+- [ ] Every setup command in the README was executed verbatim by someone other than the author — **not met, and not met honestly**: the author ran every command (`build`, `ask`, `metrics`, `streamlit run`) but no second person has repeated it. The genuine fresh-eyes check is a fresh clone, which is Phase 13's job; until that run happens this box stays unticked.
+- [x] `docs/sample_qa.md` answers are verbatim app output, not written by hand
+- [x] All PRD §16 boxes ticked with evidence
 - [ ] Commit `Phase 12: deliverables pack`
 
 ### Watch out

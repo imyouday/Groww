@@ -5,7 +5,7 @@
 # The milestone brief is the client's document, not ours. It is deliberately kept out of the public
 # repository and was purged from git history (2026-09-27) before the first push. It stays on the
 # working copy for reference only. Do not re-add.
-Docs/ProblemStatement.txt
+docs/ProblemStatement.txt
 
 # Python
 __pycache__/
