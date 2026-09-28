@@ -17,7 +17,7 @@ and no telemetry.
 ```bash
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt   # fully pinned, incl. transitive deps
-.venv\Scripts\python -m src.pipeline build                # ~16 s -> 106 chunks
+.venv\Scripts\python -m src.pipeline build                # ~16 s -> 106 chunks (~50 s the first time, while the model downloads)
 .venv\Scripts\python -m streamlit run app.py              # http://localhost:8501
 ```
 
@@ -160,13 +160,18 @@ Two other ablation results, reported as measured:
 probes. Run it yourself:
 
 ```bash
-.venv\Scripts\python eval\run_eval.py --mode metrics        # the table below
+.venv\Scripts\python eval\run_eval.py --mode metrics --provider extractive
+.venv\Scripts\python eval\run_eval.py --mode metrics --provider llm
 .venv\Scripts\python eval\run_eval.py --mode calibration    # the §12 sweep
 .venv\Scripts\python eval\run_eval.py --mode ablation --ablation all
-.venv\Scripts\python eval\run_eval.py --mode metrics --json # for CI-style assertions
+.venv\Scripts\python eval\run_eval.py --mode metrics --provider extractive --json
 ```
 
-Latest run, `config_hash 75ee0d1fb6b6`, both providers:
+**Pass `--provider` explicitly.** Omitting it evaluates only the *active* provider — `llm` when
+`LLM_API_KEY` is set, `extractive` otherwise — so one bare run gives you half the table with no
+warning. Each run appends a dated block to `eval/report.md`; the file is never rewritten.
+
+Latest run, `config_hash c6fae467b326`. The eight metrics come out identical on both providers:
 
 | Metric | Value | Target | n | Met |
 | --- | --- | --- | --- | --- |
@@ -179,7 +184,7 @@ Latest run, `config_hash 75ee0d1fb6b6`, both providers:
 | pii_leakage | 0 | ≤ 0 | 32 | yes |
 | grounding_gap_rate | 0 | ≤ 0 | 24 | yes |
 
-Median latency **38 ms** extractive (p95 50 ms), **805 ms** with the LLM (p95 1804 ms, which includes
+Median latency **38 ms** extractive (p95 50 ms), **783 ms** with the LLM (p95 1308 ms, which includes
 the rate-limited rows that fell back to extractive). Every number, plus the labelled `s_i`/`t_i`
 scores behind the sweep and all four ablation tables, is in [`eval/report.md`](eval/report.md). That
 file is append-only and dated: runs are added, never edited out.
@@ -197,16 +202,52 @@ input has not been shown it can fail.
 | Python | 3.11 |
 | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` (384-d, cosine, CPU) |
 | Vector store | ChromaDB 0.5.23, collection `mf_faq_hdfc_v1` |
-| `config_hash` | `75ee0d1fb6b651f3234af5b7f87ae4a6ab9aee24772054ba2001719a28a922f0` |
+| `config_hash` | `c6fae467b32678c7373aac09ffe95898ed9eeec4dc0dadc052384d6119121193` |
 | `corpus_hash` | `924af25cea195b3a94f797eed707ddacb3a7a77422dc2d4115b9a099a6c54291` |
 | Chunks | 106 — fees 79, tax 17, risk 5, general 5; median 229 tokens, max 254 |
 | Sources fetched | 2026-09-27 (all five), from the committed snapshots in `data/processed/` |
-| Index build | 16.4 s |
+| Index build, model already cached | 16.4 s |
+| Index build, first run on a fresh clone | ~50 s (includes the 384-d model download) |
 
 `corpus_hash` is a sha256 over every chunk's id and content in sorted id order. Rebuilding from the
-committed snapshots reproduced it exactly, which is the reproducibility claim: the same corpus
-produces the same index, byte for byte in content. `data/raw/` and `data/processed/` are committed
-precisely so the build does not depend on the network.
+committed snapshots reproduced it exactly in a fresh clone at a different path, which is the
+reproducibility claim: the same corpus produces the same index, byte for byte in content.
+`data/raw/` and `data/processed/` are committed precisely so the build does not depend on the
+network.
+
+`config_hash` is a sha256 over the *resolved* settings. It deliberately excludes the path the
+config file was read from, so a clone at any location hashes identically — a fresh-clone rehearsal
+caught it being included, which had made the published value unreproducible for anyone else.
+
+### Frozen configuration
+
+`config.lock.json` is the freeze record for tag `v1.0-class-demo`: the fully resolved settings, all
+125 pinned package versions, both hashes, the embedding model, and each source's URL, `fetched_at`
+and sha256 over its extracted text. It is a record, not an input — nothing reads it at runtime. The
+API key is deliberately absent.
+
+```json
+{
+  "lock_version": 1,
+  "frozen_for": "v1.0-class-demo",
+  "python": "3.11.9",
+  "config_hash": "c6fae467b32678c7373aac09ffe95898ed9eeec4dc0dadc052384d6119121193",
+  "corpus_hash": "924af25cea195b3a94f797eed707ddacb3a7a77422dc2d4115b9a099a6c54291",
+  "chunk_count": 106
+}
+```
+
+The load-bearing pins, and what breaks without them:
+
+| Package | Version | Constraint |
+| --- | --- | --- |
+| `chromadb` | 0.5.23 | must stay 0.5.x; 0.6 changes the client constructor |
+| `tokenizers` | 0.20.3 | `chromadb` 0.5.x fails above this |
+| `sentence-transformers` | 5.7.0 | — |
+| `transformers` | 4.46.3 | must stay <5 for `sentence-transformers` 5.7.0 |
+| `streamlit` | 1.64.0 | — |
+
+To re-freeze after an intentional change: `python -m src.pipeline build` and re-derive the lock.
 
 Both hashes are recorded in `data/build_report.json` and reprinted by `python -m src.pipeline build`.
 
@@ -214,13 +255,14 @@ Both hashes are recorded in `data/build_report.json` and reprinted by `python -m
 
 | | |
 | --- | --- |
-| Index build (5 sources → 106 chunks) | 16.4 s |
+| Index build, model already cached (5 sources → 106 chunks) | 16.4 s |
+| Index build, first run, model not yet downloaded | ~50 s |
 | App cold start, fresh process, warm file cache | **10.5 s** |
 | — of which `warm_index()` on first call | 4.4 s |
 | — repeat `warm_index()` call | 0.02 s |
 | First answer after warm-up | 102 ms |
 | Steady-state answer latency | 38 ms median, 50 ms p95 (32-row eval run) |
-| Answer latency with the LLM | 805 ms median, 1804 ms p95 |
+| Answer latency with the LLM | 783 ms median, 1308 ms p95 |
 
 The 10.5 s is the honest number for a demo machine starting cold: it is dominated by importing
 `sentence_transformers` and `torch`, not by the corpus — which is 106 chunks, not 106,000. Once the
@@ -302,8 +344,19 @@ Every `PRD.md` §16 checkbox, verified:
 | 8 | README documents setup, scope, known limits | Met | this file |
 | 9 | `docs/sample_qa.md` has 5–10 real Q&A pairs with links | Met | 10 pairs, verbatim output |
 | 10 | Source list exported as CSV **and** MD | Met | `data/sources.csv`, `docs/sources.md` |
-| 11 | Full rebuild from raw snapshots in one command; offline demo works | Met | `python -m src.pipeline build` from committed snapshots; `tests/test_layering.py`, offline rehearsal |
-| 12 | ≤3-minute demo rehearsed twice, including offline | See `implementation.md` Phase 13 | [`docs/demo_script.md`](docs/demo_script.md) |
+| 11 | Full rebuild from raw snapshots in one command; offline demo works | Met | `python -m src.pipeline build` from committed snapshots reproduced `corpus_hash` exactly in a fresh clone; offline rehearsal with `HF_HUB_OFFLINE=1` answered all 5 corpus families and refused the 2 absent ones |
+| 12 | ≤3-minute demo rehearsed twice, including offline | Met | `docs/demo_script.md` retimed to 2:55 and run twice through the real render path (identical results, 0.1 s of step time); offline run in Rehearsal B. Details in `implementation.md` Phase 13 |
+
+**Rehearsal results (Phase 13).** A — fresh `git clone`, README followed verbatim, `corpus_hash`
+reproduced exactly at a different path, all six documented behaviours correct with no API key. B —
+`HF_HUB_OFFLINE=1`, no key: 5 families answered, 2 absent families and 1 advice probe refused,
+extractive engaged, no crash, model cache sufficient. C — the script run twice: identical output,
+no stutter. D — 6/6 adversarial probes refused or redirected, with zero fabricated figures, zero
+advice sentences and zero prompt leakage.
+
+The rehearsals also found a real bug: `config_hash` included the absolute path of the `config.yaml`
+it was read from, so the published fingerprint changed with the checkout directory and was
+unreproducible for anyone who cloned the repo. Fixed, with a regression test.
 
 ---
 
@@ -319,8 +372,10 @@ eval/checks.py          the eight metrics as pure functions
 eval/run_eval.py        metrics / calibration / ablation harness
 eval/report.md          append-only, dated evidence
 src/                    one module per pipeline stage
-tests/                  569 tests, including the layering enforcement
-docs/                   sources.md, sample_qa.md, demo_script.md, corpus_matrix.md
+tests/                  570 tests, including the layering enforcement
+config.lock.json        the v1.0 freeze record: resolved config, 125 pins, hashes, fetch dates
+docs/                   sources.md, sample_qa.md, demo_script.md, corpus_matrix.md,
+                        fallback_transcript.html (printable, for a failed browser or network)
 ```
 
 ## Development

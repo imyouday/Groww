@@ -1,7 +1,7 @@
 # Sample Q&A
 
 Every answer below is **verbatim output** from `python -m src.pipeline ask`, captured with
-provider `extractive` against `config_hash` `75ee0d1fb6b6`. None of it is
+provider `extractive` against `config_hash` `c6fae467b326`. None of it is
 hand-written: regenerate it with the same commands and the text will match, because the
 answer is assembled from retrieved chunks rather than composed.
 

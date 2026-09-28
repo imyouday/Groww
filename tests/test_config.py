@@ -127,6 +127,17 @@ def test_config_hash_is_stable_across_loads(settings: Settings) -> None:
     assert len(first) == 64
 
 
+def test_config_hash_ignores_the_checkout_directory(settings: Settings) -> None:
+    """The hash must identify the config's content, not the folder it was cloned into.
+
+    Rehearsal A caught this: a fresh clone at a different path produced a different hash from an
+    identical config.yaml, which made the published `config_hash` unreproducible for anyone else.
+    """
+    elsewhere = dataclasses.replace(settings, source_path=r"C:\somewhere\else\config.yaml")
+    assert config_hash(elsewhere) == config_hash(settings)
+    assert dataclasses.replace(settings, source_path="").source_path == ""
+
+
 def test_config_hash_changes_when_a_value_changes(settings: Settings) -> None:
     mutated = dataclasses.replace(
         settings, retrieval=dataclasses.replace(settings.retrieval, gate_threshold=0.5)

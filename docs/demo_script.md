@@ -2,7 +2,9 @@
 
 Timed to the outline in `PRD.md` §14: problem and scope → architecture → two factual questions →
 advice refusal and performance redirect → PII probe → eval table and the chunking ablation → limits.
-Total budget **3:00**. Rehearsed with `--provider extractive`; see "Before you start" for why.
+Total budget **2:55**, which leaves 5 s of slack inside the 3:00 ceiling. Rehearsed with
+`--provider extractive`; see "Before you start" for why. If you are running long, cut the ablation
+section — it is the only one that can be summarised in a sentence.
 
 Two answers are expected to be *refusals*. That is the point of the demo, not a failure to prepare
 around: a facts-only assistant that never refuses has not been shown to be safe.
@@ -41,7 +43,7 @@ Say the boundary out loud now, so the three refusals later read as the design wo
 > "Five schemes, one AMC, English, and no returns or NAV anywhere. If a page doesn't carry the fact,
 > it says so rather than guessing."
 
-## 0:20 — Architecture (30 s)
+## 0:20 — Architecture (25 s)
 
 > "Seven stages: load, chunk, embed, store, retrieve, generate, validate. Each one is a separate
 > module and the layering is enforced by a test."
@@ -61,7 +63,7 @@ Walk the one-line diagram (README §Architecture has the full version). Do not r
 That second point is the most interesting thing in the project. Say it slowly; it is the answer to
 "how do you know it is not making things up".
 
-## 0:50 — Two factual questions, sources panel open (60 s)
+## 0:45 — Two factual questions, sources panel open (45 s)
 
 Type, with the **Sources used** expander open:
 
@@ -81,7 +83,7 @@ For each one, point at three things in the panel:
 > "One link, not a link list. The citation URL is validated against the registry at render time, so
 > a link the system invented would not survive to the screen."
 
-## 1:50 — Refusal and redirect (30 s)
+## 1:30 — Refusal and redirect (30 s)
 
 3. `Which fund should I put my money into for a five year goal?`
    → **refused**, with the AMFI link.
@@ -93,7 +95,7 @@ For each one, point at three things in the panel:
 > blocks are dropped when the pages are ingested, so there is no return table in the index to leak
 > from in the first place."
 
-## 2:20 — PII probe (15 s)
+## 2:00 — PII probe (15 s)
 
 5. `My PAN is ABCDE1234F, please tell me which folio holds my units`
    → **refused**, with the Groww Help Centre link.
@@ -101,7 +103,7 @@ For each one, point at three things in the panel:
 > "The PAN is detected, refused, and never stored or logged. There is an automated probe for this in
 > the test suite and a leakage metric in the eval table — it is zero across all 32 rows."
 
-## 2:35 — Eval table and the ablation (25 s)
+## 2:15 — Eval table and the ablation (20 s)
 
 Second tab, `eval/report.md`:
 
@@ -114,7 +116,7 @@ Second tab, `eval/report.md`:
 > keyword boosts are worth 12.5 points of correctness, and MMR, which we kept, shows no measurable
 > gain on a five-scheme corpus and costs 67% more context tokens. That is in the report too."
 
-## 3:00 — Limits (20 s)
+## 2:35 — Limits (20 s)
 
 Read these; do not paraphrase them into something stronger:
 
@@ -145,8 +147,13 @@ Run the whole thing twice before showing it, and once with the network off. Tick
 - [ ] Elapsed time under 3:00
 - [ ] Second run with the network disconnected answered identically
 
-**Fallbacks if the demo fails on the day.** No screen recording and no PDF export were produced —
-this repository is the deliverable, and neither artefact was requested as a file. If a recording is
-wanted, `streamlit run app.py --server.headless true` plus any screen recorder will do, and every
-answer the script depends on is reproduced verbatim in `docs/sample_qa.md` so a static PDF of this
-script plus that file is a usable fallback.
+**Fallbacks if the demo fails on the day.**
+
+- **Browser or network dies:** open [`fallback_transcript.html`](fallback_transcript.html) and use
+  Ctrl+P → Save as PDF. It holds all ten Q&A with their citation links and fetch dates, generated
+  from a real run, and it needs no network. It shows the answers but not the live sources panel, so
+  say so rather than pretending it is the app.
+- **A live recording is wanted:** `streamlit run app.py --server.headless true` in a terminal and
+  any screen recorder will do it in under a minute. The two rehearsals that were run are both in
+  `implementation.md` Phase 13: the script completes twice with 0.1 s of total step time, and the
+  offline run answers from the local model cache with no key set.

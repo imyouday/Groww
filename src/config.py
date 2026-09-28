@@ -470,10 +470,16 @@ def load_settings(path: Path | str | None = None) -> Settings:
 
 
 def config_hash(settings: Settings | None = None) -> str:
-    """Return a stable sha256 over the resolved settings, for reproducibility records (§18.3)."""
+    """Return a stable sha256 over the resolved settings, for reproducibility records (§18.3).
+
+    `source_path` is excluded: it records where the file was read from, not what it said, so
+    including it would make the hash a function of the checkout directory. Two clones of the same
+    commit must produce the same value, which is the whole point of publishing it.
+    """
     resolved = settings if settings is not None else load_settings()
+    payload = {key: value for key, value in asdict(resolved).items() if key != "source_path"}
     canonical = json.dumps(
-        _canonical(asdict(resolved)), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        _canonical(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 

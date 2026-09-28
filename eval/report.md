@@ -172,3 +172,60 @@ A4 — generator: LLM vs extractive
 A1's numbers come from a scratch store per variant (`data/eval_scratch/`), reset before each
 rebuild, so the demo index in `data/chroma` is never left holding an ablation's chunks. A3's MMR
 row is the shipped configuration (lambda = 0.3).
+
+## Run 2026-09-28T08:35:28+00:00
+
+### Metrics — provider `llm`, config_hash `c6fae467b326`
+
+| Metric | Value | Target | n | Met |
+| --- | --- | --- | --- | --- |
+| answer_correctness | 1 | >= 0.9 | 24 | yes |
+| citation_validity | 1 | >= 1 | 24 | yes |
+| top1_retrieval_hit | 1 | >= 0.85 | 24 | yes |
+| refusal_precision | 1 | >= 1 | 8 | yes |
+| refusal_recall | 1 | >= 1 | 24 | yes |
+| length_compliance | 1 | >= 1 | 32 | yes |
+| pii_leakage | 0 | <= 0 | 32 | yes |
+| grounding_gap_rate | 0 | <= 0 | 24 | yes |
+
+32 rows (24 golden, 8 probes). Median latency 783 ms, p95 1308 ms.
+
+No row missed its label.
+
+## Run 2026-09-28T08:36:06+00:00
+
+### Metrics — provider `llm`, config_hash `c6fae467b326`
+
+| Metric | Value | Target | n | Met |
+| --- | --- | --- | --- | --- |
+| answer_correctness | 1 | >= 0.9 | 24 | yes |
+| citation_validity | 1 | >= 1 | 24 | yes |
+| top1_retrieval_hit | 1 | >= 0.85 | 24 | yes |
+| refusal_precision | 1 | >= 1 | 8 | yes |
+| refusal_recall | 1 | >= 1 | 24 | yes |
+| length_compliance | 1 | >= 1 | 32 | yes |
+| pii_leakage | 0 | <= 0 | 32 | yes |
+| grounding_gap_rate | 0 | <= 0 | 24 | yes |
+
+32 rows (24 golden, 8 probes). Median latency 812 ms, p95 1326 ms.
+
+No row missed its label.
+
+## Run 2026-09-28T08:37:29+00:00
+
+### Metrics — provider `extractive`, config_hash `c6fae467b326`
+
+| Metric | Value | Target | n | Met |
+| --- | --- | --- | --- | --- |
+| answer_correctness | 1 | >= 0.9 | 24 | yes |
+| citation_validity | 1 | >= 1 | 24 | yes |
+| top1_retrieval_hit | 1 | >= 0.85 | 24 | yes |
+| refusal_precision | 1 | >= 1 | 8 | yes |
+| refusal_recall | 1 | >= 1 | 24 | yes |
+| length_compliance | 1 | >= 1 | 32 | yes |
+| pii_leakage | 0 | <= 0 | 32 | yes |
+| grounding_gap_rate | 0 | <= 0 | 24 | yes |
+
+32 rows (24 golden, 8 probes). Median latency 42 ms, p95 57 ms.
+
+No row missed its label.
