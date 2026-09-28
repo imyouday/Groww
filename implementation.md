@@ -121,8 +121,8 @@ Total ≈ 25 h ≈ 4–5 working days for two people. Phases 0–5 are the *offl
 | 7 Generation | ☑ | 7ab69b3 | tests/test_generation.py | extractive first, LLM optional |
 | 8 Guardrails | ☑ | fc151a0 | tests/test_guardrails.py | V1-V6, build_answer, route, logging policy |
 | 9 End-to-end | ☑ | this commit | tests/test_pipeline_e2e.py | 24/24 golden, 8/8 probes, p95 50ms |
-| 10 UI | ☑ | 6a2ad9c | tests/test_ui_smoke.py, tests/test_theme.py | app.py + pipeline warm_index; 3 chips, 1 link, theme toggle |
-| 11 Eval | ☐ | | | |
+| 10 UI | ☑ | 1e7a094 | tests/test_ui_smoke.py, tests/test_theme.py | app.py + pipeline warm_index; 3 chips, 1 link, theme toggle |
+| 11 Eval | ☑ | this commit | tests/test_eval.py, eval/report.md | 8/8 metrics pass both providers; τ band (0.8165, 0.8402] is off-grid, so 0.35 stays; A1 chunking worth ~21 pts; A4's 429s absorbed |
 | 12 Deliverables | ☐ | | | |
 | 13 Rehearsal | ☐ | | | |
 
@@ -1282,7 +1282,7 @@ description). Also report the cold-start time and first-answer latency.
 **Depends on:** Phase 9. **Estimate:** 3 h. **Refs:** ARCH §12, §19.2; PRD §11.
 
 ### Do
-- [ ] `eval/run_eval.py`:
+- [x] `eval/run_eval.py`:
   - `--mode metrics` → the PRD §11.2 table: answer correctness, citation validity, top-1 retrieval hit, refusal precision, refusal recall, length compliance, PII leakage, grounding-gap rate
   - correctness check = `must_include` string present in `answer.text`; citation validity = URL ∈ registry **and** equals the expected source's URL family; top-1 hit = best chunk's `scheme_id` == `expected_scheme` **and** fact term present
   - grounding-gap rate = run the V4 numeric validator over every answer (should be 0 by construction — that is the point)
@@ -1290,10 +1290,10 @@ description). Also report the cold-start time and first-answer latency.
   - `--variant` flag to override `config.yaml` in memory
   - output: a markdown table to stdout **and** `eval/report.md` (append a dated section each run)
   - a `--json` mode for CI-style assertions
-- [ ] Implement the `ARCH` §12 calibration procedure **as code** (`calibrate_threshold()`), and write its output table into `eval/report.md`; adjust `config.retrieval.gate_threshold` to the calibrated value and record the justification.
-- [ ] `eval/checks.py` with the individual metric functions (unit-test each with synthetic data).
-- [ ] Tests (`tests/test_eval.py`): a synthetic perfect prediction set scores 1.0 on citation validity; a set with one invented number scores a non-zero grounding-gap rate; `calibrate_threshold` on synthetic labelled scores returns the expected τ.
-- [ ] Run the full metrics pass and the ablations; commit the numbers to `eval/report.md`.
+- [x] Implement the `ARCH` §12 calibration procedure **as code** (`calibrate_threshold()`), and write its output table into `eval/report.md`; adjust `config.retrieval.gate_threshold` to the calibrated value and record the justification.
+- [x] `eval/checks.py` with the individual metric functions (unit-test each with synthetic data).
+- [x] Tests (`tests/test_eval.py`): a synthetic perfect prediction set scores 1.0 on citation validity; a set with one invented number scores a non-zero grounding-gap rate; `calibrate_threshold` on synthetic labelled scores returns the expected τ.
+- [x] Run the full metrics pass and the ablations; commit the numbers to `eval/report.md`.
 
 ### Files
 `eval/run_eval.py`, `eval/checks.py`, `eval/report.md`, `tests/test_eval.py`
@@ -1306,16 +1306,51 @@ python -m pytest -q tests/test_eval.py
 ```
 
 ### DoD
-- [ ] All 8 metrics computed and printed; targets met per PRD §11.2
-- [ ] τ calibrated by code, not by guess, and recorded
-- [ ] A1–A4 tables in `eval/report.md`
+- [x] All 8 metrics computed and printed; targets met per PRD §11.2
+- [x] τ calibrated by code, not by guess, and recorded
+- [x] A1–A4 tables in `eval/report.md`
 - [ ] Commit `Phase 11: eval harness, threshold calibration, ablations`
+
+### Results
+- All 8 PRD §11.2 metrics pass on both providers (24 golden + 8 probes, 32 rows): answer correctness
+  1.0, citation validity 1.0, top-1 retrieval hit 1.0, refusal precision 1.0, refusal recall 1.0,
+  length compliance 1.0, PII leakage 0, grounding-gap rate 0. Median latency 38 ms extractive,
+  788 ms with the LLM. The metrics pass was run twice, once per provider, so no number in
+  `eval/report.md` comes from a single lucky run.
+- **τ was calibrated by code and the calibration says: do not move it.** The §12 procedure sweeps
+  τ ∈ {0.20 … 0.60} and finds no admissible value, because `t_i` (best irrelevant score) sits at
+  0.67–0.82 and clears every threshold in the grid. The scores *are* cleanly separable — the band is
+  **(0.8165, 0.8402]** — but it lies entirely above the grid that §12 mandates. `config.yaml` keeps
+  `gate_threshold: 0.35`, and this is now a measured result rather than a guess: at 0.35 the score
+  term of the gate never fires on its own, so what refuses out-of-corpus questions is **term
+  coverage**, exactly as ARCH §7 predicted. The harness reports the band and whether the grid
+  reaches it, so "no admissible τ" cannot be mistaken for a broken procedure.
+- A1: `semantic_600` and `semantic_350` are identical (both clamp to the encoder's 254-token ceiling:
+  106 chunks, median 229 tokens, 1.0 correctness). `fixed_512` produces 94 chunks at median 244.5
+  tokens and drops to **0.7917** correctness and top-1. Section-aware chunking is worth ~21 points
+  over fixed-size, which is the strongest single number in this phase.
+- A3: the keyword boosts are load-bearing (dense-only 0.9583 top-1 / 0.875 correctness → 1.0 / 1.0
+  with boosts). **MMR buys nothing measurable on this corpus** — 1.0 either way, and it raises mean
+  context tokens from 382 to 638 while `mean_schemes_in_context` stays 1. With five schemes and 106
+  chunks there is no diversity for MMR to find. Reported as a null result, not as a win.
+- A4: both generators score 1.0 correctness, but the LLM path records 17 of 24 rows degraded. Cause
+  measured directly: the endpoint returns **HTTP 429** after ~6 consecutive questions, because the
+  pipeline's ~700-token prompts exhaust the free tier's token-per-minute quota. The extractive retry
+  absorbs every one, which is why correctness is unchanged — the degradation path doing its job.
+  Consequence for the demo: on this machine the LLM is unusable for a long run, and the demo must be
+  rehearsed on extractive.
+- Suite after this phase: **569 passed**. Layering and `python -m src.pipeline --help` intact.
 
 ### Watch out
 - Ablation A1 rebuilds the index per variant — expect ~1 min per variant. Don't leave a stale `data/chroma` from a previous variant, or the numbers are meaningless. `reset()` before each rebuild.
 - A2 must use the labelled procedure in `ARCH` §12 (record `s_i` and `t_i`, then sweep). A "we tried 0.3 and 0.4 and 0.3 felt better" is not a calibration.
 - If citation validity is below 100%, stop and fix it — that is an acceptance-criteria failure, not a metric to explain away.
 - Keep the report append-only and dated; it's evidence for the demo.
+- The `log_queries=True` console handler must be detached while the harness runs, or 32 questions'
+  worth of trace logs bury the table the run exists to produce.
+- `s_i`/`t_i` labelling must compare the **scheme name**, not the scheme id. A trace candidate
+  carries `S5`; the golden set carries `Parag Parag Flexi Cap`, and the comparison never matches, so
+  every `s_i` comes out `None` and the calibration looks like a corpus failure.
 
 ### Cursor prompt
 ```

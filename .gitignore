@@ -29,6 +29,11 @@ data/chunks_and_vectors.txt
 # config_hash and corpus_hash this file records.
 data/build_report.json
 
+# Eval ablation scratch: one throwaway store and chunk dump per chunking variant (PRD §11.3 A1).
+# Rebuilt from data/raw/ on every `--mode ablation` run, and kept out of data/chroma precisely so
+# the demo index is never left holding an ablation's chunks.
+data/eval_scratch/
+
 # Phase 0 spike scratch: 3.3 MB of throwaway HTML/text for candidate URLs, most of them rejected.
 # docs/corpus_matrix.md records the findings; Phase 3 re-fetches the 5 accepted sources into
 # data/raw/ deterministically, so committing these would only duplicate the corpus.

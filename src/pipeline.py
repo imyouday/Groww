@@ -150,8 +150,14 @@ def build(
     refresh: bool = False,
     rebuild: bool = False,
     settings: Settings | None = None,
+    variant: chunking.Variant | None = None,
 ) -> BuildReport:
-    """Run the full offline build and return its report, having written every artefact to disk."""
+    """Run the full offline build and return its report, having written every artefact to disk.
+
+    `variant` is ablation A1's hook: it overrides `config.chunking`'s bounds in memory for one build
+    and is never a default, so the shipped strategy in `config.yaml` stays the only thing a normal
+    build reads.
+    """
     resolved = settings or load_settings()
     started = time.perf_counter()
     registry = loading.load_registry(resolved)
@@ -160,7 +166,7 @@ def build(
         raise PipelineError(
             "no source could be loaded; the build cannot produce an index from zero documents"
         )
-    chunks, chunk_warnings = chunking.chunk_all(registry, resolved)
+    chunks, chunk_warnings = chunking.chunk_all(registry, resolved, variant)
     if not chunks:
         raise PipelineError("loading produced documents but chunking produced no chunks")
     vectors = embedding.embed([chunk.embed_text for chunk in chunks], resolved)
