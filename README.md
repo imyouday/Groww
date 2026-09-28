@@ -26,6 +26,21 @@ and are documented in the file itself: **chromadb 0.5.x** needs `tokenizers <=0.
 **sentence-transformers 5.7.0** needs `transformers <5`. Upgrading either without re-checking the
 pair breaks the install; `pip check` is the test.
 
+### Restarting after an edit
+
+`restart-app.ps1` is the supported way to run the app locally:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\restart-app.ps1
+```
+
+It stops **both** the venv launcher and the server child, waits for the port to free, starts the
+app, and only reports `Up:` once the health endpoint answers. Killing just the launcher is the trap:
+the child keeps the port, so the next launch binds nothing while the orphan answers requests, and
+the app looks broken. Run this after every source change — hot reload is off by design, because
+Streamlit's file watcher crawls this repo's ~48,800 files (48,420 of them inside `.venv`, which its
+blacklist does not cover) and contends with `st.cache_resource`'s key computation.
+
 ### The LLM is optional
 
 The demo needs **no `.env` and no API key**. Generation has two paths:
@@ -415,6 +430,7 @@ unreproducible for anyone who cloned the repo. Fixed, with a regression test.
 
 ```
 app.py                  Streamlit UI (imports only pipeline, config, models, templates, theme)
+restart-app.ps1         clean local restart: kills the launcher and its child, then waits for health
 config.yaml             every tunable constant; nothing hard-coded in stage modules
 data/sources.csv        the source registry — the citation allowlist
 data/raw, data/processed  committed HTML + cleaned snapshots (offline reproducibility)
@@ -423,16 +439,16 @@ eval/checks.py          the eight metrics as pure functions
 eval/run_eval.py        metrics / calibration / ablation harness
 eval/report.md          append-only, dated evidence
 src/                    one module per pipeline stage
-tests/                  570 tests, including the layering enforcement
+tests/                  578 tests, including the layering enforcement
 config.lock.json        the v1.0 freeze record: resolved config, 125 pins, hashes, fetch dates
 docs/                   sources.md, sample_qa.md, demo_script.md, corpus_matrix.md,
-                        fallback_transcript.html (printable, for a failed browser or network)
+                         fallback_transcript.html (printable, for a failed browser or network)
 ```
 
 ## Development
 
 ```bash
-.venv\Scripts\python -m pytest -q                          # 569 passed
+.venv\Scripts\python -m pytest -q                          # 578 passed
 .venv\Scripts\python -m pytest -q tests/test_layering.py   # 26 passed
 .venv\Scripts\python -m src.pipeline --help
 ```

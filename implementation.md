@@ -1800,6 +1800,98 @@ refused or redirected with no fabricated content.
 
 ---
 
+## Phase 14 — Public deployment
+
+**Goal:** A public URL, reachable without a laptop.
+**Depends on:** Phase 13. **Estimate:** 2 h. **Refs:** ARCH §18.1 (derived state not committed).
+
+### Do
+- [x] Assess hosts. Vercel rejected: a Streamlit session outlives any function timeout, the filesystem is read-only, and torch is ~800 MB against a 250 MB limit. Render free rejected: it wipes the disk on idle, so every wake rebuilds the index. Streamlit Community Cloud chosen — free, no card, keeps the disk between sleeps.
+- [x] Make the index self-heal at startup, so a fresh clone (which has no `data/chroma/`) works without a manual build.
+- [x] Add `.streamlit/config.toml`: headless, telemetry off (NFR-7), file watcher off.
+- [x] Document the deploy, including the Python 3.11 selection that Cloud ignores in the repo.
+- [x] Deploy and fix what the host rejected.
+
+### Files
+`.streamlit/config.toml` (new), `src/store.py` (`is_built`), `src/pipeline.py` (`warm_index`), `src/theme.py` (`from_toggle`), `app.py`, `restart-app.ps1` (new), README.
+
+### Verify
+```
+python -m pytest -q
+python -m pytest -q tests/test_layering.py
+```
+
+### DoD
+- [x] A hosted instance answers questions from a cold clone with no manual build step
+- [x] `answer()` still raises `IndexNotBuiltError` on a missing index — self-healing is UI-only
+- [x] A cold-start build reproduces `corpus_hash 924af25c…` exactly
+- [x] App starts and serves locally
+- [x] Committed: `2cb5c8b`, `3179afa`
+
+### Results
+
+**The index had to be able to build itself.** `data/chroma/` is derived state and is not committed,
+so the hosted clone reached `warm_index()` with an empty collection and raised. It now builds first
+from the committed `data/raw` snapshots: 12.4 s cold, 0.0 s warm, no network, `corpus_hash`
+reproduced exactly. `answer()` deliberately still raises, so a caller that skipped the build is told
+rather than silently handed a 12-second wait. Two tests cover both halves.
+
+**Three things the host taught us, none of which were guessable in advance:**
+
+1. `pythonVersion` in `config.toml` **crashes Streamlit 1.64** at startup — it is not a registered
+   config key, and the parser dies on the bare top-level scalar. Community Cloud ignores it anyway;
+   the version is chosen in the deploy dialog and defaults to 3.12, where the pinned trio does not
+   resolve. The pin is a human step in the README, not a repo setting. `runtime.txt` and
+   `.python-version` are ignored as well.
+2. `.streamlit/config.toml` must be UTF-8 **without a BOM**. Streamlit's minimal TOML reader folds
+   the BOM into the first key name and refuses to start. Noted in the file itself.
+3. The first deploy failed on `python-dateutil` — a network timeout, not a bad pin. Six attempts
+   across two installers timed out on one URL while everything around it fetched at ~250 MB/s. The
+   pin is valid and Python 3.11 was selected correctly; the fix was to restart.
+
+**A local bug the deployment surfaced, and the one real find here.** The theme toggle in the sidebar
+was wired inside-out (`Theme.LIGHT if toggled else Theme.DARK`). The toggle renders its default from
+the current theme, so it always reported the opposite of what was stored; each rerun flipped the
+preference and the next flipped it back. `app.py` could not converge and called `st.rerun()` forever.
+In a browser that is an app that never loads: the server accepts the connection, pins a core at
+100%, and never answers. **577 tests stayed green throughout**, because every palette assertion
+passed and nothing checked that the control could settle. `theme.from_toggle()` now owns the
+mapping, and a test replays the sidebar's state machine from both starting themes asserting it
+*settles* rather than asserting where it lands — the first draft of that test also passed against
+the broken code, which is the same mistake in miniature.
+
+The file watcher is off for a related reason: with a repo-local `.venv` it crawls 48,814 files
+(48,420 in `.venv`), and Streamlit's blacklist covers `**/venv` but not `**/.venv`, so the crawl and
+`st.cache_resource`'s `inspect.getsourcelines()` key computation fight over the same files.
+`restart-app.ps1` exists because the alternative is worse: `streamlit run` under a venv spawns a
+launcher plus a child, and killing only the launcher leaves the child holding the port.
+
+### Watch out
+- The hosted app is public and unauthenticated. Nothing sensitive is in it, but that is a decision,
+  not an accident.
+- The free tier's memory ceiling is the untested variable. If it OOMs, Hugging Face Spaces is the
+  fallback: same code, 16 GB free RAM, and a Dockerfile instead of a config file.
+- `pythonVersion` will look like the natural place to pin the interpreter. It crashes this
+  Streamlit version. The deploy dialog is the only place it can be set.
+
+### Cursor prompt
+
+```
+Task: Phase 14 — public deployment on Streamlit Community Cloud. Do NOT add features.
+
+Read README.md's Deploying section and architecture.md §18.1.
+
+1. Confirm the hosted clone can build its own index: delete data/chroma/, start the app, and answer
+   one question. It must rebuild from the committed snapshots and reproduce the published corpus_hash.
+2. Confirm answer() still raises IndexNotBuiltError on a missing index, so only the UI self-heals.
+3. Deploy to Community Cloud with Python 3.11 selected in Advanced settings, no secrets, and paste
+   the full build log. Any pip error is a dependency pin problem, not a network flake, unless it is
+   the same package timing out twice.
+4. Re-run the full suite and paste the output.
+```
+
+---
+
 ## Appendix A — Phase dependency graph
 
 ```
