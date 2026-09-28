@@ -236,6 +236,16 @@ def test_ensure_built_passes_once_there_are_chunks(settings, built) -> None:
     store.ensure_built(settings)
 
 
+def test_an_unusable_index_directory_is_an_index_not_built_error(tmp_path) -> None:
+    """A blocked `chroma_dir` is the same problem as a missing index, and the UI only catches the typed one."""
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("", encoding="utf-8")
+    base = load_settings()
+    broken = replace(base, paths=replace(base.paths, chroma_dir=str(blocker / "chroma")))
+    with pytest.raises(IndexNotBuiltError, match="python -m src.pipeline build"):
+        store.ensure_built(broken)
+
+
 def test_the_query_path_reuses_one_handle(settings, built) -> None:
     """Opening a client costs ~20ms, so the read path must not do it twice per question."""
     assert store.open_collection(settings) is store.open_collection(settings)

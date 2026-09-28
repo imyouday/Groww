@@ -114,6 +114,27 @@ guardrails:
   enforce_numeric_grounding: true
   banned_terms: [should, recommend, advisable, best, outperform, guaranteed, return, returns, nav, buy, sell, hold, suitable]
 
+# Streamlit chrome and the example-question chips (architecture.md §16). The chips are exactly
+# three on load and swap to factual examples after a refusal (PRD FR-41), because a demo that
+# offers three advice questions first would open with three refusals.
+ui:
+  title: "Mutual Fund FAQ Assistant — Facts Only"
+  scope_line: "HDFC AMC · 5 schemes · public sources only"
+  placeholder: "Ask a factual question about the covered schemes"
+  link_label: "View source"
+  chat_input_label: "Chat"
+  sources_label: "Sources used"
+  index_missing_title: "No index found"
+  index_missing_message: "This app needs the offline index before it can answer anything. From the project root, run:"
+  example_questions:
+    - "What is the expense ratio of the HDFC Large Cap fund?"
+    - "What is the exit load on the HDFC Small Cap fund?"
+    - "What is the minimum SIP amount for the HDFC ELSS tax saver fund?"
+  example_questions_after_refusal:
+    - "What is the risk rating of the HDFC Flexi Cap fund?"
+    - "What is the benchmark of the HDFC Balanced Advantage fund?"
+    - "What is the minimum SIP amount for the HDFC Large Cap fund?"
+
 registry:
   known_other_amcs: [parag, axis, icici, sbi, kotak, tata nippon, nippon, quant, mahindra, icici prudential]
   # Ordered longest-first alias match (architecture.md §11.3). Longest-first is mandatory: with a

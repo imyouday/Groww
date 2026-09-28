@@ -522,6 +522,55 @@ def _answer(
     return replace(answer_value, trace={**retrieval_trace, **answer_value.trace})
 
 
+def active_provider(settings: Settings | None = None) -> str:
+    """Return the generator name that `answer` would use, degrading to `extractive` when unset.
+
+    The UI asks this to label the sidebar, and a misconfigured `.env` must not become a start-up
+    crash in front of an audience, so the typed configuration error is reported as the name the
+    system will actually use rather than raised.
+    """
+    try:
+        _, provider = resolve_generator(settings)
+    except GenerationError:
+        return "extractive"
+    return provider
+
+
+def index_status(settings: Settings | None = None) -> dict[str, Any]:
+    """Return the facts the UI sidebar shows: what is indexed, from what, and when.
+
+    The UI must not import `src.store` or `src.registry` directly (architecture.md §5.2), so the
+    read-only probe the sidebar needs is answered here, where importing them is allowed. The
+    encoder is deliberately *not* loaded: the sidebar reports the model id, and warming it belongs
+    to `warm_index`, which the UI calls once per session.
+    """
+    resolved = settings or load_settings()
+    registry = load_registry(resolved)
+    facts: dict[str, Any] = dict(store.stats(resolved))
+    facts["schemes"] = [scheme.scheme_name for scheme in registry.schemes]
+    facts["scheme_count"] = len(registry.schemes)
+    facts["warnings"] = list(_read_report(resolved).get("warnings", []))
+    facts["provider"] = active_provider(resolved)
+    return facts
+
+
+def warm_index(settings: Settings | None = None) -> dict[str, Any]:
+    """Load the registry, the encoder, and the collection, and return the sidebar facts.
+
+    Everything expensive in a cold start is done here exactly once per Streamlit session, so the
+    first question does not pay for it and the audience can see that the app is pre-warmed
+    (architecture.md §16.2, NFR-2). The throwaway encode matters as much as the weight load: the
+    first real forward pass through a freshly loaded encoder costs about 2.5s of lazy
+    initialisation, and paying it here turns the first user-visible answer into a 50ms one.
+    """
+    resolved = settings or load_settings()
+    load_registry(resolved)
+    store.ensure_built(resolved)
+    encoder = embedding.get_encoder()
+    encoder.encode(["warm up the encoder"], convert_to_numpy=True)
+    return index_status(resolved)
+
+
 def ask(query: str, provider: str | None = None, debug: bool = False) -> int:
     """Answer one question from the terminal and print the rendered answer, returning an exit code."""
     try:

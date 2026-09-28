@@ -155,6 +155,20 @@ class CopySettings:
 
 
 @dataclass(frozen=True)
+class UiSettings:
+    title: str
+    scope_line: str
+    placeholder: str
+    link_label: str
+    chat_input_label: str
+    sources_label: str
+    index_missing_title: str
+    index_missing_message: str
+    example_questions: tuple[str, ...]
+    example_questions_after_refusal: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Settings:
     paths: PathsSettings
     embedding: EmbeddingSettings
@@ -166,6 +180,7 @@ class Settings:
     guardrails: GuardrailsSettings
     registry: RegistrySettings
     copy: CopySettings
+    ui: UiSettings
     source_path: str = ""
 
 
@@ -180,6 +195,7 @@ _SECTIONS: dict[str, type] = {
     "guardrails": GuardrailsSettings,
     "registry": RegistrySettings,
     "copy": CopySettings,
+    "ui": UiSettings,
 }
 
 _ALLOWED_CHUNKING_STRATEGIES = frozenset(strategy.value for strategy in ChunkingStrategy)
@@ -297,6 +313,16 @@ def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
             factsheet_index_url=str(raw["registry"]["factsheet_index_url"]),
         ),
         "copy": CopySettings(**{f.name: str(raw["copy"][f.name]) for f in fields(CopySettings)}),
+        "ui": UiSettings(
+            **{
+                f.name: (
+                    _as_str_tuple(raw["ui"][f.name], f"ui.{f.name}")
+                    if f.name.startswith("example_questions")
+                    else str(raw["ui"][f.name])
+                )
+                for f in fields(UiSettings)
+            }
+        ),
     }
 
 

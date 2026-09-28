@@ -65,8 +65,20 @@ class NoTelemetry(Component):
 
 
 def _client_for(path: str) -> chromadb.Client:
-    """Return a persistent client for one directory, with telemetry disabled (NFR-7)."""
-    Path(path).mkdir(parents=True, exist_ok=True)
+    """Return a persistent client for one directory, with telemetry disabled (NFR-7).
+
+    An index directory that cannot be created is an `IndexNotBuiltError` rather than the raw
+    `OSError` Chroma would raise, because the UI catches the typed error and shows the build
+    instruction: a missing, blocked, or mistyped `chroma_dir` is the same problem as an index
+    that was never built.
+    """
+    try:
+        Path(path).mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise IndexNotBuiltError(
+            f"the index directory {path} is not usable ({error}); "
+            f"run `python -m src.pipeline build` after fixing paths.chroma_dir"
+        ) from error
     return chromadb.PersistentClient(
         path=path,
         settings=chromadb.config.Settings(
