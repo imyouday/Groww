@@ -1892,6 +1892,92 @@ Read README.md's Deploying section and architecture.md §18.1.
 
 ---
 
+## Phase 15 — Wireframe redesign (Streamlit, no new stack)
+
+The shared Google Stitch wireframes in `design/stitch/` arrived after Phase 14. The brief that came
+with them said "no frontend, use React", which does not apply: this project *is* a Streamlit app, and
+`AGENTS.md` forbids introducing a frontend toolchain. The user was asked and chose to restyle the
+Streamlit app to the wireframe. So this phase is a presentation-layer change: `src/retrieval.py`,
+`src/intents.py`, `src/generation.py` and `src/guardrails.py` are untouched, and the citation,
+sentence-count, performance and PII invariants are unchanged.
+
+### What the wireframe asked for, and what happened to it
+
+The mockup is a design artefact, not a data source. Its "Axis Bluechip · Direct Growth" panel carries
+NAV, AUM, a 1-day return, a fund age and a five-level riskometer, none of which exist in
+`data/sources.csv` and two of which the system is forbidden to state at all. Wiring those numbers in
+would have made the demo look finished and be a lie, so they were dropped and the panel was replaced
+with cards that are true: the grounding context for the scheme the last answer was about, the real
+index provenance (chunk count, scheme count, active generator, embedding model, build time), a
+riskometer in an explicit "not in the corpus" state, and the registry's citation policy.
+
+Three more wireframe items were cut for the same reason rather than for effort. The per-answer copy
+button needs custom JavaScript, which is the dependency the brief forbids. `localStorage` theme
+persistence is not reachable from a Streamlit script, so the theme persists in `st.session_state` and
+Streamlit's own `?theme=` parameter, which resets on reload. The dark-mode switch moves from the nav
+into the sidebar, because that is the only place Streamlit will host a real focusable control.
+
+The structured highlight tiles — "MINIMUM SIP ₹ 500 / EXIT LOAD 1.00% / BENCHMARK NIFTY 50" — are the
+most tempting thing in the mockup and the one thing that must not be built. The backend returns
+prose; parsing prose into tiles is the "never computes a figure" violation wearing a nicer hat.
+
+### What the code does now
+
+- `app.py` builds each turn as an HTML string and hands it to one `st.markdown`, because that is the
+  only way to get a card in Streamlit. Everything interpolated into that string goes through
+  `escape()`, since a chunk containing `<` or `&` would otherwise be injected into the page.
+- `turn_html()` branches on `Answer.kind`: a factual answer gets the citation card, the source
+  document link and the meta row; anything in `REFUSAL_KINDS` gets the amber "Regulatory Compliance
+  Notice"; a greeting gets neither, because a compliance banner on "hello" misreports what happened.
+- The run that produces an answer ends in `st.rerun()`. A chip click is only reported to the run that
+  drew it, so the buttons have to be drawn before the answer is computed, but the hero, the chip
+  labels and the sidebar's scheme all depend on the answer. The rerun is invisible because Streamlit
+  never paints the intermediate frame, and it is what makes a refusal swap the chip row in the same
+  paint as the refusal instead of one interaction later.
+- `pipeline.pii_hits()` is a thin pass-through to `intents.has_pii` that returns identifier *kinds*.
+  It exists because the input box has to refuse before the model is loaded, and because `app.py` may
+  not import `src.intents`. Returning kinds rather than matches is what keeps the warning from
+  reprinting the PAN in the transcript.
+
+### Two bugs this phase found, both of them silent
+
+**The `ui` config section stringified its own lists.** The loader decided list-versus-scalar by field
+name and only special-cased `example_questions*`, so `nav_links` arrived as the literal string
+`"['Explore', 'Investments', ...]"`. The nav rendered one link per character of that string, including
+the brackets and the apostrophes, and every other test stayed green because nothing looked at the
+nav. `_ui_value()` now coerces by the field's declared type, so the next list field works the moment
+it is declared and cannot be missed by a name-based rule.
+
+**A nested same-quote f-string.** Python 3.11 accepts `f"...{" is-active" if x else ""}..."` and then
+silently treats the tail of the string as literal text. It was the same root cause: the comprehension
+iterated the stringified config instead of the tuple. `test_every_card_is_well_formed_html` now
+asserts that tags balance and that no card contains a stray brace, so this class of mistake is a red
+test rather than a page that looks slightly wrong.
+
+Neither was caught by a helper test, and both were only visible by rendering the page. The suite now
+runs `app.py` itself through `streamlit.testing.v1.AppTest`: it asserts the page paints with no
+exception, that a factual question draws a grounded card and keeps the factual chips, that an advice
+question draws the compliance card and swaps the chips, that an identifier is never sent or echoed,
+and that the theme toggle settles. `st.chat_input(label=...)` was the first casualty — it is not a
+parameter of `st.chat_input` in 1.64, and it took out the whole page.
+
+### Verification
+
+- Full suite: **602 passed**. Layering: 26 passed. `python -m src.pipeline --help` intact.
+- Local app restarted through `restart-app.ps1`: `/_stcore/health` returns `ok`, and 6 s of idle
+  measures 0.05 s of CPU.
+
+### Watch out
+
+- The raw-HTML cards mean an unescaped interpolation is an XSS-shaped bug. `escape()` is not
+  optional and `test_answer_text_is_escaped_before_it_reaches_raw_html` guards it.
+- `st.button(width="stretch")` replaced `use_container_width=True`, which is on its way out in 1.64.
+- The wireframe's sample data is still in `design/stitch/*.html` in the repository. It is reference
+  material and must never be copied into a rendered string; `test_the_wireframes_sample_figures_are
+  _never_rendered` asserts the figures do not reach the page.
+
+---
+
 ## Appendix A — Phase dependency graph
 
 ```

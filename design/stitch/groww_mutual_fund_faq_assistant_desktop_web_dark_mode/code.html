@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"surface-variant":"#353534","tertiary-container":"#fda417","surface-container-lowest":"#0e0e0e","outline":"#85948c","surface-container-high":"#2a2a2a","error":"#ffb4ab","on-secondary":"#003828","surface-container-highest":"#353534","surface":"#131313","surface-dim":"#131313","on-tertiary":"#472a00","inverse-surface":"#e5e2e1","on-error-container":"#ffdad6","on-primary":"#003828","tertiary-fixed":"#ffddb8","secondary-container":"#01b386","primary":"#44edb7","on-surface":"#e5e2e1","on-background":"#e5e2e1","primary-container":"#00d09c","primary-fixed":"#59fdc5","on-tertiary-fixed":"#2a1700","primary-fixed-dim":"#2fe0aa","on-tertiary-fixed-variant":"#653e00","on-primary-fixed":"#002116","outline-variant":"#3c4a43","secondary-fixed":"#71fac8","on-tertiary-container":"#673f00","surface-bright":"#393939","on-error":"#690005","error-container":"#93000a","inverse-on-surface":"#313030","secondary":"#50ddad","surface-tint":"#2fe0aa","on-surface-variant":"#bacac1","on-primary-container":"#00533c","secondary-fixed-dim":"#50ddad","background":"#131313","on-secondary-fixed":"#002116","on-primary-fixed-variant":"#00513b","on-secondary-container":"#003d2c","on-secondary-fixed-variant":"#00513b","inverse-primary":"#006c4f","tertiary":"#ffc98a","tertiary-fixed-dim":"#ffb95f","surface-container":"#201f1f","surface-container-low":"#1c1b1b"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"gutter":"1rem","space-lg":"1.5rem","space-md":"1rem","space-sm":"0.5rem","space-xl":"2rem","margin-tablet":"1.5rem","margin-desktop":"2.5rem","space-xs":"0.25rem","margin":"1rem","gutter-desktop":"1.5rem"},fontFamily:{"headline-xl-mobile":["Inter"],"body-md":["Inter"],"body-sm":["Inter"],"display-lg":["Inter"],"headline-md":["Inter"],"headline-xl":["Inter"],"label-caption":["Inter"],"label-numeric":["Inter"],"label-badge":["Inter"],"headline-sm":["Inter"],"body-lg":["Inter"]},fontSize:{"headline-xl-mobile":["26px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"400"}],"body-sm":["12px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"headline-md":["22px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-caption":["10px",{"lineHeight":"12px","letterSpacing":"0.02em","fontWeight":"500"}],"label-numeric":["14px",{"lineHeight":"20px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-badge":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}]}}}};</script></head><body class="bg-surface font-body-md text-on-surface antialiased min-h-screen"><header class="fixed top-0 left-0 w-full z-50 bg-surface-container-low border-b border-outline-variant"><div class="h-16 max-w-7xl mx-auto px-margin-desktop flex items-center justify-between gap-gutter"><div class="flex items-center gap-space-lg flex-1"><div class="flex items-center gap-space-sm"><img alt="Brand logo. - Primary color: #00d09c
+- Font: inter
+- Mode: light
+- Roundness: rounded-md
+" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1V6kiw4X0MyCacG1WCmupjfltUiBuaA_3ssXDbHFGkiAnTUUzVLJMoW5cZaKPPsRgZBOPLf0qCDnqNkHRJM0Yb07Fk6h8G_MkaCo0PRU9fMBQjzSWFrc1_qx3DNkgm7Hlz41E_FyNr-lzWzDUJSBnU3QvQJkc9WsW4sfbD8MHpei1FEtKZC5aVz2sMsT8OLFFVaVSEW5TSUv-k1QmA4M1Q8_2LJJ-iY2G9Z5MY-ltDcxxGc9nUp-_q9maE"/><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight font-bold">Groww</span></div><div class="relative hidden lg:flex items-center w-80"><span class="material-symbols-outlined absolute left-3 text-outline text-[20px] pointer-events-none">search</span><input class="w-full h-10 pl-10 pr-12 bg-surface-container border border-outline-variant rounded-xl text-on-surface placeholder:text-outline focus:outline-none focus:border-primary-container font-body-sm text-body-sm transition-all" placeholder="What are you looking for today?" type="text"/><kbd class="absolute right-3 px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant font-label-caption text-label-caption text-on-surface-variant pointer-events-none">Ctrl+K</kbd></div><nav class="hidden xl:flex items-center gap-space-lg h-16" data-active-classes="text-primary-container font-semibold border-b-2 border-primary-container"><a class="text-on-surface-variant hover:text-on-surface font-body-md text-body-md transition-colors h-full flex items-center" data-path="explore" href="#">Explore</a><a class="text-on-surface-variant hover:text-on-surface font-body-md text-body-md transition-colors h-full flex items-center" data-path="investments" href="#">Investments</a><a class="text-on-surface-variant hover:text-on-surface font-body-md text-body-md transition-colors h-full flex items-center" data-path="mutual-funds" href="#">Mutual Funds</a><a aria-current="page" class="transition-colors h-full flex items-center text-primary-container font-semibold border-b-2 border-primary-container" data-path="statutory-document-assistant" href="#">AI FAQ Assistant</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden sm:flex items-center gap-space-xs px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant"><span class="material-symbols-outlined text-primary-container text-[18px]">account_balance_wallet</span><span class="font-label-numeric text-label-numeric text-on-surface">₹42,850.00</span></div><button aria-label="Notifications" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="h-10 border-t border-outline-variant bg-surface-container-lowest/80"><div class="max-w-7xl mx-auto px-margin-desktop h-full flex items-center gap-space-xs text-on-surface-variant font-body-sm text-body-sm"><a class="hover:text-on-surface transition-colors flex items-center gap-1" data-path="explore" href="#"><span class="material-symbols-outlined text-[16px]">home</span>Home</a><span class="text-outline text-[12px]">›</span><a class="hover:text-on-surface transition-colors" data-path="mutual-funds" href="#">Mutual Funds</a><span class="text-outline text-[12px]">›</span><span class="text-primary-container font-semibold">Statutory Document Assistant</span></div></div></header><main class="w-full pt-[104px] bg-surface min-h-[calc(100vh-140px)]"><div class="max-w-7xl mx-auto px-margin-desktop py-space-lg"><div class="flex flex-col w-full">
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg w-full items-start">
+<!-- Left & Center Conversation Canvas (approx 65% / 8 cols) -->
+<div class="xl:col-span-8 flex flex-col gap-space-md w-full">
+<!-- Assistant Header Surface -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="relative flex items-center justify-center w-11 h-11 rounded-lg bg-surface-container-high text-primary">
+<span class="material-symbols-outlined text-[24px]">smart_toy</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-primary rounded-full border-2 border-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-surface text-[10px] font-bold">check</span>
+</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Mutual Fund Assistant</h1>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-badge text-label-badge uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">verified</span> SID Verified
+              </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Facts-Only • Grounded in Official AMC, SEBI & AMFI Filings</p>
+</div>
+</div>
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-tertiary-container/10 text-tertiary font-label-badge text-label-badge shadow-sm">
+<span class="material-symbols-outlined text-[16px] text-tertiary">warning</span>
+<span>No Investment Advice • Informational Only</span>
+</div>
+</div>
+<!-- Welcome & Compliance RAG Engine Box -->
+<div class="bg-surface-container-low rounded-xl p-space-md relative overflow-hidden shadow-sm">
+<div class="absolute -top-12 -right-12 w-48 h-48 bg-primary/5 rounded-full blur-2xl pointer-events-none"></div>
+<div class="flex flex-col gap-space-sm relative z-10">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-primary-container/15 text-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">psychology</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface">Groww MF Intelligence (RAG v2.4)</span>
+<span class="px-2 py-0.5 rounded bg-surface-container-high text-primary-container font-label-caption text-label-caption">SECURE SANDBOX</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+            Ask factual questions regarding statutory scheme information documents (SID), Key Information Memorandums (KIM), total expense ratios (TER), mandatory lock-ins, exit loads, and monthly NAV disclosures.
+          </p>
+<div class="p-3 rounded-lg bg-tertiary-container/10 flex items-start gap-2.5">
+<span class="material-symbols-outlined text-tertiary text-[18px] shrink-0 mt-0.5">policy</span>
+<p class="font-body-sm text-body-sm text-tertiary leading-snug">
+<strong class="font-semibold text-on-surface">Strictly Informational:</strong> This system does not furnish buy/sell opinions, forward return projections, or personalized portfolio advice. All queries are verified verbatim against regulatory deposits.
+            </p>
+</div>
+</div>
+</div>
+<!-- Quick Action Query Chips -->
+<div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="queryChips">
+<span class="font-label-caption text-label-caption text-outline uppercase tracking-wider shrink-0 mr-1">Suggested:</span>
+<button class="px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-all font-body-sm text-body-sm shrink-0 shadow-sm flex items-center gap-1.5" onclick="insertQuery(this.innerText)" type="button">
+<span class="material-symbols-outlined text-[14px]">lock_clock</span>
+          ELSS lock-in period rules?
+        </button>
+<button class="px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-all font-body-sm text-body-sm shrink-0 shadow-sm flex items-center gap-1.5" onclick="insertQuery(this.innerText)" type="button">
+<span class="material-symbols-outlined text-[14px]">percent</span>
+          Axis Bluechip Fund exit load?
+        </button>
+<button class="px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-all font-body-sm text-body-sm shrink-0 shadow-sm flex items-center gap-1.5" onclick="insertQuery(this.innerText)" type="button">
+<span class="material-symbols-outlined text-[14px]">receipt_long</span>
+          Download capital gains statement?
+        </button>
+<button class="px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-all font-body-sm text-body-sm shrink-0 shadow-sm flex items-center gap-1.5" onclick="insertQuery(this.innerText)" type="button">
+<span class="material-symbols-outlined text-[14px]">calculate</span>
+          Total Expense Ratio (TER) formula?
+        </button>
+</div>
+<!-- Dialogue Thread Container -->
+<div class="flex flex-col gap-space-lg mt-space-sm" id="chatThread">
+<!-- User Query 1 -->
+<div class="flex flex-col items-end self-end max-w-xl w-full">
+<div class="bg-primary-container text-on-primary-container px-space-md py-3 rounded-2xl rounded-tr-xs shadow-md">
+<p class="font-body-md text-body-md font-medium">What is the exit load for Axis Bluechip Fund?</p>
+</div>
+<span class="font-label-caption text-label-caption text-outline mt-1 mr-1">10:14 AM</span>
+</div>
+<!-- Assistant Response 1 (Factual Resolution with Document Proof) -->
+<div class="flex flex-col items-start self-start max-w-2xl w-full gap-2">
+<div class="w-full bg-surface-container rounded-2xl rounded-tl-xs p-space-md shadow-md flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-md bg-primary-container text-on-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[15px]">smart_toy</span>
+</div>
+<span class="font-label-numeric text-label-numeric text-on-surface">Groww Assistant</span>
+<span class="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-badge text-label-badge font-medium">
+                  SID Verified
+                </span>
+</div>
+<span class="font-label-caption text-label-caption text-outline">Response latency: 420ms</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface">
+              The exit load schedule for <strong class="text-on-surface font-semibold">Axis Bluechip Fund (Regular & Direct Plans)</strong> is officially defined as follows:
+            </p>
+<!-- Structured breakdown callout -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+<div class="bg-surface-container-lowest p-space-sm rounded-lg flex flex-col gap-1">
+<div class="flex items-center gap-1.5 text-tertiary">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span class="font-label-numeric text-label-numeric text-tertiary">1.00% Exit Load</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Applies if units are redeemed or switched out within <span class="text-on-surface font-medium">12 months (365 days)</span> from the date of allotment.
+                </p>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded-lg flex flex-col gap-1">
+<div class="flex items-center gap-1.5 text-primary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span class="font-label-numeric text-label-numeric text-primary">Nil (0.00%)</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  No penalty or charge if redemption or systematic withdrawal is executed after completing <span class="text-on-surface font-medium">12 months</span>.
+                </p>
+</div>
+</div>
+<!-- Official Citation Card -->
+<div class="bg-surface-container-low p-3.5 rounded-xl flex items-start gap-3 hover:bg-surface-container-high transition-colors cursor-pointer group">
+<div class="w-8 h-8 rounded-lg bg-primary-container/15 text-primary-container flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between gap-2">
+<h4 class="font-body-sm text-body-sm font-semibold text-on-surface truncate group-hover:text-primary transition-colors">
+                    Axis AMC Scheme Information Document (SID)
+                  </h4>
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-primary transition-colors">open_in_new</span>
+</div>
+<p class="font-label-caption text-label-caption text-on-surface-variant mt-0.5">
+                  Part II: Unit Details • Section IV (Fees & Expenses), Page 42 • AMFI Registry Doc ID: AMC-AX-2024-BC-09
+                </p>
+</div>
+</div>
+<!-- Card Bottom Tools and Metadata -->
+<div class="flex flex-wrap items-center justify-between gap-space-sm pt-2 text-on-surface-variant">
+<span class="font-label-caption text-label-caption text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">event_available</span>
+                Repository: Sep 2026 Filings
+              </span>
+<div class="flex items-center gap-1">
+<span class="font-label-caption text-label-caption text-outline mr-1">Helpful?</span>
+<button aria-label="Helpful response" class="p-1 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">thumb_up</span>
+</button>
+<button aria-label="Unhelpful response" class="p-1 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-error transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">thumb_down</span>
+</button>
+<button aria-label="Copy answer" class="p-1 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors ml-1" onclick="navigator.clipboard.writeText('The exit load for Axis Bluechip Fund is 1.00% if redeemed within 12 months, Nil thereafter.')" type="button">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</div>
+</div>
+<span class="font-label-caption text-label-caption text-outline ml-1">10:14 AM</span>
+</div>
+<!-- User Query 2 (Subjective/Advisory request) -->
+<div class="flex flex-col items-end self-end max-w-xl w-full">
+<div class="bg-primary-container text-on-primary-container px-space-md py-3 rounded-2xl rounded-tr-xs shadow-md">
+<p class="font-body-md text-body-md font-medium">Should I buy Axis Long Term Equity Fund or Axis Small Cap Fund?</p>
+</div>
+<span class="font-label-caption text-label-caption text-outline mt-1 mr-1">10:16 AM</span>
+</div>
+<!-- Assistant Response 2 (Safe Regulatory Refusal Card) -->
+<div class="flex flex-col items-start self-start max-w-2xl w-full gap-2">
+<div class="w-full bg-surface-container rounded-2xl rounded-tl-xs p-space-md shadow-md flex flex-col gap-space-md">
+<!-- Refusal Tag Bar -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-md bg-error-container text-error flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">gavel</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-error">Regulatory Compliance Notice</span>
+</div>
+<span class="px-2.5 py-0.5 rounded-full bg-error-container text-error font-label-badge text-label-badge uppercase tracking-wider font-semibold">
+                Advice Prohibited
+              </span>
+</div>
+<!-- Body Safeguard -->
+<div class="p- space-sm rounded-xl bg-surface-container-lowest flex flex-col gap-2">
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+                I am a factual statutory document retrieval engine and <strong class="text-error font-medium">cannot offer subjective recommendations</strong>, scheme comparative suitability, or advice on whether you should purchase, hold, or redeem specific mutual fund units.
+              </p>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+                Under the <strong class="text-on-surface">SEBI (Investment Advisers) Regulations, 2013</strong>, customized investment guidance requires comprehensive risk profiling, asset suitability assessment, and time horizon mapping conducted through a licensed SEBI-Registered Investment Adviser (RIA).
+              </p>
+</div>
+<!-- Non-Advisory Action Paths -->
+<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-space-sm pt-1">
+<button class="flex-1 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-numeric text-label-numeric flex items-center justify-center gap-2 transition-all" type="button">
+<span class="material-symbols-outlined text-primary-container text-[18px]">speed</span>
+                Compare Official Riskometers
+              </button>
+<button class="flex-1 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-numeric text-label-numeric flex items-center justify-center gap-2 transition-all" type="button">
+<span class="material-symbols-outlined text-secondary text-[18px]">description</span>
+                Inspect Scheme Factsheets
+              </button>
+</div>
+<!-- Guardrail Seal -->
+<div class="flex items-center justify-between pt-2">
+<span class="font-label-caption text-label-caption text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-primary-container text-[14px]">shield</span>
+                SEBI / AMFI Statutory Filter Active • Guardrail #AF-409
+              </span>
+<span class="font-label-caption text-label-caption text-outline">Section 19(1) Safe-Harbor</span>
+</div>
+</div>
+<span class="font-label-caption text-label-caption text-outline ml-1">10:16 AM</span>
+</div>
+</div>
+<!-- Sticky Prompt Composer -->
+<div class="sticky bottom-4 w-full z-20 mt-space-md">
+<div class="bg-surface-container-high/95 backdrop-blur-md p-2 rounded-2xl shadow-xl flex flex-col gap-1.5">
+<form class="flex items-center gap-2 w-full" onsubmit="handleFormSubmit(event)">
+<button aria-label="Upload AMC document for reference" class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-bright text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[20px]">attach_file</span>
+</button>
+<input class="flex-1 bg-transparent px-2 text-on-surface placeholder:text-outline focus:outline-none font-body-md text-body-md" id="userPromptInput" placeholder="Ask a factual question (e.g., minimum SIP, benchmark, TER)..." type="text"/>
+<button aria-label="Voice input" class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-bright text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors shrink-0" type="button">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+</button>
+<button aria-label="Submit query" class="w-10 h-10 rounded-xl bg-primary-container hover:bg-secondary-container text-on-primary-container flex items-center justify-center transition-transform active:scale-95 shrink-0 shadow-md" type="submit">
+<span class="material-symbols-outlined text-[20px]">arrow_upward</span>
+</button>
+</form>
+<div class="flex items-center justify-between px-2 pt-0.5">
+<span class="font-label-caption text-label-caption text-outline flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px] text-primary-container">lock</span>
+              Privacy Safeguard: Do not provide PAN, Folio IDs, or bank credentials.
+            </span>
+<span class="font-label-caption text-label-caption text-outline hidden sm:inline">RAG Memory: Isolated</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Verification & Scheme Details Drawer (~350px / 4 cols) -->
+<div class="xl:col-span-4 flex flex-col gap-space-md w-full">
+<!-- Primary Scheme Context Widget -->
+<div class="bg-surface-container rounded-2xl p-space-md shadow-md flex flex-col gap-space-md">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high text-primary-container flex items-center justify-center font-bold text-headline-sm">
+              AX
+            </div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface leading-tight">Axis Bluechip Fund</h2>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Direct Plan • Growth Option</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-badge text-label-badge">
+            OPEN-ENDED
+          </span>
+</div>
+<!-- Metric Display -->
+<div class="bg-surface-container-lowest p-space-sm rounded-xl flex items-center justify-between">
+<div>
+<span class="font-label-caption text-label-caption text-outline uppercase tracking-wider block">Net Asset Value (NAV)</span>
+<span class="font-headline-md text-headline-md text-on-surface">₹54.21</span>
+</div>
+<div class="text-right">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary-container/15 text-primary font-label-numeric text-label-numeric">
+<span class="material-symbols-outlined text-[16px]">trending_up</span> +0.84%
+            </span>
+<span class="font-label-caption text-label-caption text-outline block mt-0.5">As of 18 Sep 2026</span>
+</div>
+</div>
+<!-- Classification tags -->
+<div class="flex flex-wrap items-center gap-1.5">
+<span class="px-2.5 py-1 rounded-md bg-surface-container-high text-on-surface font-label-caption text-label-caption">Large Cap Category</span>
+<span class="px-2.5 py-1 rounded-md bg-error-container/40 text-error font-label-caption text-label-caption flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">emergency_home</span>
+            Very High Risk (Riskometer)
+          </span>
+<span class="px-2.5 py-1 rounded-md bg-surface-container-high text-on-surface-variant font-label-caption text-label-caption">Benchmark: NIFTY 50 TRI</span>
+</div>
+<!-- Quick Fact Sheet Matrix -->
+<div class="flex flex-col gap-2 pt-1">
+<h3 class="font-label-badge text-label-badge text-outline uppercase tracking-wider">Statutory Fact Matrix</h3>
+<div class="divide-y divide-outline-variant/30 text-body-sm">
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">Expense Ratio (TER)</span>
+<span class="font-label-numeric text-label-numeric text-on-surface">0.72% <span class="text-outline font-normal">(Direct)</span></span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">Category Avg TER</span>
+<span class="font-label-numeric text-label-numeric text-on-surface">1.04%</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">AUM (Scheme Size)</span>
+<span class="font-label-numeric text-label-numeric text-on-surface">₹32,450.80 Cr</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">Turnover Ratio</span>
+<span class="font-label-numeric text-label-numeric text-on-surface">32.00%</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">Fund Manager</span>
+<span class="font-label-numeric text-label-numeric text-on-surface">Shreyash Devalkar</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">Exit Load Structure</span>
+<span class="font-label-numeric text-label-numeric text-primary-container text-right">1% ≤ 1 Yr, Nil > 1 Yr</span>
+</div>
+<div class="py-2 flex items-center justify-between">
+<span class="text-on-surface-variant">Minimum SIP Amount</span>
+<span class="font-label-numeric text-label-numeric text-on-surface">₹500 / month</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Verified Statutory Source Repositories -->
+<div class="bg-surface-container rounded-2xl p-space-md shadow-md flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Filing Grounding</h3>
+<span class="flex items-center gap-1 font-label-caption text-label-caption text-primary">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> Synchronized
+          </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+          Answers generated in this session are anchored exclusively to official documents registered with Indian regulatory authorities.
+        </p>
+<div class="flex flex-col gap-2 mt-1">
+<!-- Item 1 -->
+<div class="p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high transition-colors flex items-center justify-between group cursor-pointer">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-primary-container text-[18px]">verified_user</span>
+<div class="truncate">
+<p class="font-body-sm text-body-sm text-on-surface truncate group-hover:text-primary transition-colors">Axis MF SID & KIM 2026</p>
+<p class="font-label-caption text-label-caption text-outline">Updated: 02 Sep 2026</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-on-surface text-[16px]">file_download</span>
+</div>
+<!-- Item 2 -->
+<div class="p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high transition-colors flex items-center justify-between group cursor-pointer">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-secondary text-[18px]">account_balance</span>
+<div class="truncate">
+<p class="font-body-sm text-body-sm text-on-surface truncate group-hover:text-secondary transition-colors">SEBI Monthly Portfolio Disclosure</p>
+<p class="font-label-caption text-label-caption text-outline">Audited Holdings: August 2026</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-on-surface text-[16px]">file_download</span>
+</div>
+<!-- Item 3 -->
+<div class="p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high transition-colors flex items-center justify-between group cursor-pointer">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-tertiary text-[18px]">database</span>
+<div class="truncate">
+<p class="font-body-sm text-body-sm text-on-surface truncate group-hover:text-tertiary transition-colors">AMFI Scheme Master Reference</p>
+<p class="font-label-caption text-label-caption text-outline">Code: 120503 • Verified Feed</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-on-surface text-[16px]">open_in_new</span>
+</div>
+</div>
+<div class="mt-2 p-3 rounded-lg bg-surface-container-lowest flex items-start gap-2">
+<span class="material-symbols-outlined text-outline text-[16px] shrink-0 mt-0.5">info</span>
+<p class="font-label-caption text-label-caption text-on-surface-variant leading-relaxed">
+            Mutual fund investments are subject to market risks. Read all scheme related statutory documents carefully before investing. For personalized financial planning, consult a SEBI RIA.
+          </p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  function insertQuery(text) {
+    const input = document.getElementById('userPromptInput');
+    if (input) {
+      input.value = text.trim();
+      input.focus();
+    }
+  }
+
+  function handleFormSubmit(event) {
+    event.preventDefault();
+    const input = document.getElementById('userPromptInput');
+    const query = input.value.trim();
+    if (!query) return;
+
+    const thread = document.getElementById('chatThread');
+    
+    // Append User Bubble
+    const userWrap = document.createElement('div');
+    userWrap.className = 'flex flex-col items-end self-end max-w-xl w-full';
+    userWrap.innerHTML = `
+      <div class="bg-primary-container text-on-primary-container px-space-md py-3 rounded-2xl rounded-tr-xs shadow-md">
+        <p class="font-body-md text-body-md font-medium">${escapeHtml(query)}</p>
+      </div>
+      <span class="font-label-caption text-label-caption text-outline mt-1 mr-1">Just now</span>
+    `;
+    thread.appendChild(userWrap);
+    input.value = '';
+
+    // Simulate RAG Assistant Verification Response
+    setTimeout(() => {
+      const isAdvice = query.toLowerCase().includes('should i') || query.toLowerCase().includes('best fund') || query.toLowerCase().includes('recommend') || query.toLowerCase().includes('buy');
+      const assistantWrap = document.createElement('div');
+      assistantWrap.className = 'flex flex-col items-start self-start max-w-2xl w-full gap-2';
+
+      if (isAdvice) {
+        assistantWrap.innerHTML = `
+          <div class="w-full bg-surface-container rounded-2xl rounded-tl-xs p-space-md shadow-md flex flex-col gap-space-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-md bg-error-container text-error flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[16px]">gavel</span>
+                </div>
+                <span class="font-headline-sm text-headline-sm text-error">Advisory Guardrail Triggered</span>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full bg-error-container text-error font-label-badge text-label-badge uppercase tracking-wider font-semibold">
+                Advice Prohibited
+              </span>
+            </div>
+            <p class="font-body-md text-body-md text-on-surface">
+              Under SEBI Investment Advisers Regulations, subjective investment advisory, predictive returns, or individual scheme selection cannot be dispensed by automated informational tools. Please consult a SEBI RIA for individualized allocation.
+            </p>
+            <div class="flex items-center justify-between pt-1">
+              <span class="font-label-caption text-label-caption text-outline">Statutory Safeguard Active</span>
+            </div>
+          </div>
+          <span class="font-label-caption text-label-caption text-outline ml-1">Just now</span>
+        `;
+      } else {
+        assistantWrap.innerHTML = `
+          <div class="w-full bg-surface-container rounded-2xl rounded-tl-xs p-space-md shadow-md flex flex-col gap-space-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-md bg-primary-container text-on-primary-container flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[15px]">smart_toy</span>
+                </div>
+                <span class="font-label-numeric text-label-numeric text-on-surface">Groww Assistant</span>
+                <span class="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-badge text-label-badge font-medium">
+                  SID Verified
+                </span>
+              </div>
+              <span class="font-label-caption text-label-caption text-outline">Retrieved from AMFI Filings</span>
+            </div>
+            <p class="font-body-md text-body-md text-on-surface">
+              Regarding <em>"${escapeHtml(query)}"</em>: Factual mutual fund provisions stipulate strict adherence to the scheme terms set forth in the current Key Information Memorandum (KIM). Units are subject to daily closing NAV determination as per SEBI valuation mandates.
+            </p>
+            <div class="bg-surface-container-low p-3 rounded-lg flex items-center justify-between">
+              <span class="font-body-sm text-body-sm text-on-surface font-medium">Verified against AMFI Standard Database (Sep 2026)</span>
+              <span class="material-symbols-outlined text-primary-container text-[18px]">verified</span>
+            </div>
+          </div>
+          <span class="font-label-caption text-label-caption text-outline ml-1">Just now</span>
+        `;
+      }
+      thread.appendChild(assistantWrap);
+      assistantWrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 450);
+  }
+
+  function escapeHtml(string) {
+    const div = document.createElement('div');
+    div.innerText = string;
+    return div.innerHTML;
+  }
+</script></div></main><footer class="w-full bg-surface-container-lowest border-t border-outline-variant py-space-xl"><div class="max-w-7xl mx-auto px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-space-md text-on-surface-variant font-body-sm text-body-sm"><div>© 2024 Groww Invest Tech Pvt. Ltd. All rights reserved. SEBI Registered Member.</div><div class="flex items-center gap-space-lg"><a class="hover:text-on-surface transition-colors" href="#">Privacy Policy</a><a class="hover:text-on-surface transition-colors" href="#">Terms of Service</a><a class="hover:text-on-surface transition-colors" href="#">Regulatory Disclosures</a></div></div></footer></body></html>

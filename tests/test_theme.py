@@ -139,3 +139,36 @@ def test_type_scale_radii_and_spacing_are_shared_by_both_themes() -> None:
     assert set(theme.SPACING) == {"gutter", "margin", "xs", "sm", "md", "lg", "xl"}
     for token, value in theme.SPACING.items():
         assert value.endswith("rem"), token
+
+
+def test_the_shell_uses_the_wireframe_geometry() -> None:
+    """The two-column wireframe becomes one column plus a 380px sidebar, and the values are named."""
+    css = theme.shell_css()
+    assert f"[data-testid='stSidebar'] {{ width: {theme.SIDEBAR_WIDTH_PX}px; }}" in css
+    assert f"section.main > div {{ max-width: {theme.CONTENT_MAX_WIDTH_PX}px; }}" in css
+    assert "position: sticky" in css
+    assert "backdrop-filter" in css
+
+
+def test_the_shell_collapses_to_one_column_on_a_narrow_screen() -> None:
+    """Below the breakpoint the sidebar card stack and the stat tiles stack, and the nav unrolls."""
+    css = theme.shell_css()
+    assert f"@media (max-width: {theme.NARROW_BREAKPOINT_PX}px)" in css
+    narrow = css.split(f"@media (max-width: {theme.NARROW_BREAKPOINT_PX}px)")[1]
+    assert ".mf-nav-links { display: none; }" in narrow
+    assert ".mf-tiles, .mf-rows { grid-template-columns: 1fr; }" in narrow
+    assert ".mf-user-bubble { max-width: 100%; }" in narrow
+
+
+def test_keyboard_focus_is_always_visible() -> None:
+    """WCAG 2.4.7: the demo's only controls are links, buttons and the chat box, so all three need it."""
+    css = theme.shell_css()
+    assert ":focus-visible" in css
+    assert "outline: 2px solid var(--mf-primary)" in css
+    assert ".mf-skip:focus" in css
+
+
+def test_the_two_shells_are_identical_so_only_colour_switches() -> None:
+    """Geometry in a theme-specific rule would mean the dark theme re-flows the page."""
+    assert theme.stylesheet(theme.Theme.LIGHT).count(theme.shell_css()) == 1
+    assert theme.stylesheet(theme.Theme.DARK).count(theme.shell_css()) == 1

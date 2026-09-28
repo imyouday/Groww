@@ -173,6 +173,36 @@ def test_copy_section_carries_all_seven_strings(settings: Settings) -> None:
     assert "Facts-only. No investment advice." in settings.copy.ui_disclaimer
 
 
+def test_every_ui_list_field_loads_as_a_tuple_of_strings(settings: Settings) -> None:
+    """A `tuple[str, ...]` field must arrive as a tuple, not as its own repr as a string.
+
+    The `ui` section used to decide this by field name, so a list added later was stringified and
+    the UI iterated `"['a', 'b']"` one character at a time. Driving the coercion from the
+    annotation is what makes that impossible; this asserts the result for every list field.
+    """
+    from dataclasses import fields as dataclass_fields
+
+    from src.config import UiSettings
+
+    list_fields = [
+        field
+        for field in dataclass_fields(UiSettings)
+        if field.type in ("tuple[str, ...]", tuple[str, ...])
+    ]
+    assert {field.name for field in list_fields} == {
+        "nav_links",
+        "breadcrumb",
+        "riskometer_levels",
+        "footer_links",
+        "example_questions",
+        "example_questions_after_refusal",
+    }
+    for field in list_fields:
+        value = getattr(settings.ui, field.name)
+        assert isinstance(value, tuple), f"ui.{field.name} is {type(value).__name__}"
+        assert value and all(isinstance(item, str) and item for item in value), field.name
+
+
 def test_missing_file_raises_precise_error(tmp_path: Path) -> None:
     with pytest.raises(PipelineError, match="config file not found"):
         load_settings(tmp_path / "absent.yaml")

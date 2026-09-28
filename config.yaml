@@ -118,14 +118,34 @@ guardrails:
 # three on load and swap to factual examples after a refusal (PRD FR-41), because a demo that
 # offers three advice questions first would open with three refusals.
 ui:
-  title: "Mutual Fund FAQ Assistant — Facts Only"
-  scope_line: "HDFC AMC · 5 schemes · public sources only"
-  placeholder: "Ask a factual question about the covered schemes"
-  link_label: "View source"
+  title: "Mutual Fund Assistant"
+  scope_line: "Facts-Only · Grounded in official mutual fund sources"
+  hero_title: "Groww MF Intelligence"
+  hero_body: "Ask factual questions about the covered schemes — expense ratios, exit loads, minimum SIP amounts, lock-in periods and tax treatment. Every answer is lifted from the retrieved source and carries a link to it."
+  badge_verified: "Verified Source Bot"
+  badge_no_advice: "No Advice · Informational Only"
+  placeholder: "Ask a factual question (e.g. minimum SIP, benchmark, TER)…"
+  link_label: "View Filing"
   chat_input_label: "Chat"
   sources_label: "Sources used"
   index_missing_title: "No index found"
   index_missing_message: "This app needs the offline index before it can answer anything. From the project root, run:"
+  # Header nav and breadcrumb, from the Stitch wireframe's top bar.
+  nav_links: ["Explore", "Investments", "Mutual Funds", "AI FAQ Assistant"]
+  nav_active_link: "AI FAQ Assistant"
+  breadcrumb: ["Home", "Mutual Funds", "AI FAQ & Statutory Document Assistant"]
+  sidebar_scheme_title: "Active Grounding Context"
+  sidebar_factsheet_title: "Statutory Factsheet"
+  sidebar_sources_title: "Indexed Sources"
+  sidebar_riskometer_title: "Scheme Riskometer"
+  riskometer_levels: ["Low", "Moderate", "High", "Very High"]
+  footer_disclaimer: "Mutual fund investments are subject to market risks. Read all scheme related documents carefully."
+  footer_links: ["Statutory Disclosures", "Terms of Use", "Privacy Policy", "SEBI Circulars"]
+  privacy_note: "Privacy Safeguard: Do not provide PAN, Folio IDs, or bank credentials."
+  enter_hint: "Press Enter to send"
+  rag_memory_label: "RAG Memory: Isolated"
+  chip_row_label: "Popular Factual Queries"
+  explore_all_label: "Explore all FAQs"
   example_questions:
     - "What is the expense ratio of the HDFC Large Cap fund?"
     - "What is the exit load on the HDFC Small Cap fund?"

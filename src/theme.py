@@ -271,6 +271,132 @@ def variables(palette: dict[str, str]) -> str:
     return "\n".join(f"  --mf-{token}: {palette[token]};" for token in TOKENS)
 
 
+NAV_HEIGHT_PX = 64
+SIDEBAR_WIDTH_PX = 380
+CONTENT_MAX_WIDTH_PX = 840
+NARROW_BREAKPOINT_PX = 900
+
+
+def shell_css() -> str:
+    """Return the layout rules that build the wireframe's shell around Streamlit's own widgets.
+
+    Streamlit renders the page in a fixed order, so a two-column wireframe is approximated rather
+    than reproduced: the top nav and breadcrumb are drawn as ordinary blocks at the top of the main
+    column, the chat keeps the left two thirds, and the wireframe's right column is served by
+    Streamlit's native sidebar, restyled below to match its card. The rules are deliberately
+    declarative and token-driven, so both themes get the same geometry from one rule set.
+    """
+    return "\n".join(
+        [
+            f"body {{ padding-top: {NAV_HEIGHT_PX}px; }}",
+            f"section.main > div {{ max-width: {CONTENT_MAX_WIDTH_PX}px; }}",
+            f"[data-testid='stSidebar'] {{ width: {SIDEBAR_WIDTH_PX}px; }}",
+            f"[data-testid='stSidebar'] > div {{ padding-top: {NAV_HEIGHT_PX}px; }}",
+            ".mf-nav { position: sticky; top: 0; z-index: 999; margin: -1rem -1rem 0; padding: 0.75rem 1rem;",
+            "  background: color-mix(in srgb, var(--mf-surface) 90%, transparent);",
+            "  backdrop-filter: blur(12px); border-bottom: 1px solid var(--mf-outline-variant); }",
+            ".mf-nav-row { display: flex; align-items: center; gap: 1rem; }",
+            ".mf-brand { display: flex; align-items: center; gap: 0.5rem;",
+            "  font-weight: 700; font-size: 18px; color: var(--mf-on-surface); }",
+            ".mf-brand-mark { display: grid; place-items: center; width: 28px; height: 28px;",
+            "  border-radius: 8px; background: var(--mf-primary-container); color: #04231a;",
+            "  font-weight: 800; }",
+            ".mf-nav-links { display: flex; gap: 0.25rem; margin-left: auto; }",
+            ".mf-nav-link { padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 14px;",
+            "  color: var(--mf-on-surface-variant); }",
+            ".mf-nav-link.is-active { font-weight: 600; color: var(--mf-on-surface);",
+            "  background: var(--mf-surface-container-low); }",
+            ".mf-crumb { font-size: 12px; color: var(--mf-on-surface-variant); padding: 0.5rem 0; }",
+            ".mf-card { border: 1px solid var(--mf-outline-variant); border-radius: 12px;",
+            "  padding: 1rem; margin-bottom: 1rem; background: var(--mf-surface-container-lowest);",
+            "  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04); }",
+            ".mf-card-head { display: flex; align-items: flex-start; gap: 0.75rem; }",
+            ".mf-avatar { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px;",
+            "  border-radius: 10px; background: var(--mf-primary-container); color: #04231a;",
+            "  font-weight: 700; }",
+            ".mf-title { font-size: 18px; font-weight: 600; color: var(--mf-on-surface); }",
+            ".mf-sub { font-size: 12px; color: var(--mf-on-surface-variant); }",
+            ".mf-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem;",
+            "  border-radius: 9999px; font-size: 11px; font-weight: 500; line-height: 1.6;",
+            "  background: var(--mf-surface-container-high); color: var(--mf-on-surface-variant);",
+            "  border: 1px solid var(--mf-outline-variant); }",
+            ".mf-badge.is-ok { background: var(--mf-primary-container); color: var(--mf-on-primary-container);",
+            "  border-color: transparent; }",
+            ".mf-badge.is-warn { background: var(--mf-tertiary-container);",
+            "  color: var(--mf-on-tertiary-container); border-color: transparent; }",
+            ".mf-badge.is-error { background: var(--mf-error-container);",
+            "  color: var(--mf-on-error-container); border-color: transparent; }",
+            ".mf-note { border-left: 3px solid var(--mf-tertiary-container);",
+            "  background: var(--mf-surface-container-low); border-radius: 8px; padding: 0.75rem;",
+            "  font-size: 13px; color: var(--mf-on-surface-variant); }",
+            ".mf-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }",
+            ".mf-chip { border: 1px solid var(--mf-outline-variant); border-radius: 9999px;",
+            "  background: var(--mf-surface-container-lowest); color: var(--mf-on-surface-variant);",
+            "  font-size: 12px; padding: 0.3rem 0.8rem; }",
+            ".mf-chip.is-active { background: var(--mf-on-surface); color: var(--mf-surface);",
+            "  border-color: var(--mf-on-surface); }",
+            ".mf-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.75rem 0; }",
+            ".mf-tile { border: 1px solid var(--mf-outline-variant); border-radius: 12px; padding: 0.75rem;",
+            "  background: var(--mf-surface-container-lowest); }",
+            ".mf-tile.is-warn { border-color: var(--mf-tertiary-container);",
+            "  background: color-mix(in srgb, var(--mf-tertiary-container) 18%, transparent); }",
+            ".mf-tile.is-ok { border-color: var(--mf-primary-container);",
+            "  background: color-mix(in srgb, var(--mf-primary-container) 15%, transparent); }",
+            ".mf-tile-label { font-size: 12px; color: var(--mf-on-surface-variant); }",
+            ".mf-tile-value { font-size: 18px; font-weight: 600; color: var(--mf-on-surface);",
+            "  font-variant-numeric: tabular-nums; }",
+            ".mf-tile-note { font-size: 11px; color: var(--mf-on-surface-variant); }",
+            ".mf-cite { display: flex; gap: 0.5rem; border: 1px solid var(--mf-outline-variant);",
+            "  border-radius: 10px; padding: 0.6rem 0.75rem; margin: 0.6rem 0;",
+            "  background: var(--mf-surface-container-low); }",
+            ".mf-cite-loc { font-size: 11px; color: var(--mf-on-surface-variant); }",
+            ".mf-meta { display: flex; align-items: center; gap: 0.5rem; font-size: 11px;",
+            "  color: var(--mf-on-surface-variant); }",
+            ".mf-risk { display: flex; gap: 3px; margin-top: 0.4rem; }",
+            ".mf-risk-seg { flex: 1; height: 8px; border-radius: 4px;",
+            "  background: var(--mf-surface-container-high); }",
+            ".mf-risk-seg.is-on { background: var(--mf-tertiary-container); }",
+            ".mf-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.75rem;",
+            "  font-size: 12px; }",
+            ".mf-rows dt { color: var(--mf-on-surface-variant); }",
+            ".mf-rows dd { margin: 0; text-align: right; color: var(--mf-on-surface);",
+            "  font-variant-numeric: tabular-nums; }",
+            ".mf-src { display: flex; align-items: center; gap: 0.5rem; font-size: 12px;",
+            "  padding: 0.4rem 0; border-bottom: 1px solid var(--mf-outline-variant);",
+            "  color: var(--mf-on-surface-variant); }",
+            ".mf-foot { border-top: 1px solid var(--mf-outline-variant); margin-top: 2rem;",
+            "  padding-top: 1rem; font-size: 11px; color: var(--mf-on-surface-variant); }",
+            ".mf-user { display: flex; justify-content: flex-end; }",
+            ".mf-user-bubble { background: var(--mf-primary-container); color: var(--mf-on-primary-container);",
+            "  border-radius: 12px; padding: 0.5rem 0.9rem; max-width: 80%; font-size: 14px; }",
+            f"@media (max-width: {NARROW_BREAKPOINT_PX}px) {{",
+            "  .mf-nav { position: static; }",
+            "  .mf-nav-links { display: none; }",
+            "  .mf-crumb { font-size: 11px; }",
+            "  .mf-tiles, .mf-rows { grid-template-columns: 1fr; }",
+            "  .mf-card { padding: 0.75rem; }",
+            "  .mf-user-bubble { max-width: 100%; }",
+            "  [data-testid='stAppViewContainer'] { padding-left: 0.75rem; padding-right: 0.75rem; }",
+            "}",
+            "a:focus-visible, button:focus-visible, [data-testid='stChatInput'] :focus-within {",
+            "  outline: 2px solid var(--mf-primary); outline-offset: 2px; }",
+            ".mf-skip { position: absolute; left: -9999px; }",
+            ".mf-skip:focus { position: static; left: 0; padding: 0.5rem;",
+            "  background: var(--mf-primary-container); color: var(--mf-on-primary-container);",
+            "  border-radius: 8px; z-index: 1000; }",
+            "[data-testid='stChatInput'] textarea { font-size: 14px; }",
+            "[data-testid='stChatInput'] { border-radius: 12px; }",
+            ".stButton > button, .stButton > button:focus {",
+            "  border-radius: 9999px; border: 1px solid var(--mf-outline-variant);",
+            "  background: var(--mf-surface-container-lowest); color: var(--mf-on-surface-variant);",
+            "  font-size: 12px; font-weight: 500; padding: 0.3rem 0.4rem; }",
+            ".stButton > button:hover { border-color: var(--mf-primary);",
+            "  color: var(--mf-on-surface); background: var(--mf-surface-container-high); }",
+            "[data-testid='stExpander'] { border-radius: 12px; }",
+        ]
+    )
+
+
 def stylesheet(theme: Theme | str | None = None) -> str:
     """Return the CSS that paints the page in one theme, safe to inject on every rerun.
 
@@ -296,6 +422,7 @@ def stylesheet(theme: Theme | str | None = None) -> str:
             f"h1, h2, h3 {{ font-family: {FONT_STACK}; letter-spacing: -0.02em; }}",
             f".mf-numeric {{ font-family: {FONT_STACK}; font-weight: 600; "
             f"font-size: {TYPE_SCALE['numeric'][1]}px; }}",
+            shell_css(),
         ]
     )
     media = "\n".join(

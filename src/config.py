@@ -16,7 +16,7 @@ import hashlib
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass, fields
+from dataclasses import Field, asdict, dataclass, fields
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -159,12 +159,31 @@ class CopySettings:
 class UiSettings:
     title: str
     scope_line: str
+    hero_title: str
+    hero_body: str
+    badge_verified: str
+    badge_no_advice: str
     placeholder: str
     link_label: str
     chat_input_label: str
     sources_label: str
     index_missing_title: str
     index_missing_message: str
+    nav_links: tuple[str, ...]
+    nav_active_link: str
+    breadcrumb: tuple[str, ...]
+    sidebar_scheme_title: str
+    sidebar_factsheet_title: str
+    sidebar_sources_title: str
+    sidebar_riskometer_title: str
+    riskometer_levels: tuple[str, ...]
+    footer_disclaimer: str
+    footer_links: tuple[str, ...]
+    privacy_note: str
+    enter_hint: str
+    rag_memory_label: str
+    chip_row_label: str
+    explore_all_label: str
     example_questions: tuple[str, ...]
     example_questions_after_refusal: tuple[str, ...]
 
@@ -314,17 +333,23 @@ def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
             factsheet_index_url=str(raw["registry"]["factsheet_index_url"]),
         ),
         "copy": CopySettings(**{f.name: str(raw["copy"][f.name]) for f in fields(CopySettings)}),
-        "ui": UiSettings(
-            **{
-                f.name: (
-                    _as_str_tuple(raw["ui"][f.name], f"ui.{f.name}")
-                    if f.name.startswith("example_questions")
-                    else str(raw["ui"][f.name])
-                )
-                for f in fields(UiSettings)
-            }
-        ),
+        "ui": UiSettings(**{f.name: _ui_value(f, raw["ui"]) for f in fields(UiSettings)}),
     }
+
+
+def _ui_value(field: Field, raw_section: dict[str, Any]) -> Any:
+    """Coerce one `ui` value by its declared type, so a new list field cannot become a string.
+
+    The `ui` section is a mix of scalars and string lists, and this was a list of names checked by
+    hand. A name-based rule reads as harmless and then quietly hands the UI the literal text
+    "['a', 'b']" to iterate character by character, which is how the nav ended up rendering one
+    link per letter of its own config. Driving the coercion from the annotation means the next list
+    field works the moment it is declared.
+    """
+    value = raw_section[field.name]
+    if field.type in ("tuple[str, ...]", tuple[str, ...]):
+        return _as_str_tuple(value, f"ui.{field.name}")
+    return str(value)
 
 
 def _lookup(settings: Settings, key_path: tuple[str, ...]) -> Any:

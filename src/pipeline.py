@@ -382,6 +382,18 @@ def _render_copy(template: str, settings: Settings, **overrides: str) -> str:
     return re.sub(r"\s{2,}", " ", rendered).strip()
 
 
+def pii_hits(query: str) -> list[str]:
+    """Return the kinds of personal identifier in a query, so the UI can refuse before it asks.
+
+    The pipeline already refuses a query carrying an identifier, but only after the model is loaded
+    and the question has been classified. The UI wants to stop at the keyboard, both because a
+    PAN typed into a chat box should not become a log line and because the refusal is instant. This
+    is a thin pass-through so that `app.py` can preflight without importing `src.intents`, which
+    `architecture.md` §5.2 does not allow. Only the kind is returned, never the value (C2).
+    """
+    return sorted({hit.kind for hit in has_pii(query)})
+
+
 def answer(
     query: str,
     provider: str | None = None,

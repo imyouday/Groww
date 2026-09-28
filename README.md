@@ -66,6 +66,55 @@ Measured in ablation A4: 17 of 24 LLM rows degraded, and correctness was 1.0 eit
 `config.yaml` `generation.provider` accepts `auto` (default), `llm`, or `extractive`; the CLI takes
 `--provider`. `auto` degrades to extractive when no key is present, so a missing key is never a crash.
 
+### The interface
+
+The UI is Streamlit, restyled to the Google Stitch wireframes committed in `design/stitch/`. It is
+the same app, not a rebuild: no framework was added, and `app.py` still imports only `src.pipeline`,
+`src.config`, `src.models`, `src.templates` and `src.theme`.
+
+```
+┌──────────────────────────────────────────────┬───────────────────┐
+│ top nav: brand · links · one active          │ grounding context │
+│ breadcrumb                                  │ statutory facts   │
+│ ┌──────────────────────────────────────────┐ │ riskometer        │
+│ │ assistant header: badges                 │ │ indexed sources   │
+│ │ hero card, or the conversation           │ │                   │
+│ │ three example-question chips             │ │                   │
+│ │ conversation: cards, one citation each   │ │                   │
+│ └──────────────────────────────────────────┘ │                   │
+│ [ ask a factual question                ] → │                   │
+├──────────────────────────────────────────────┴───────────────────┤
+│ market-risk disclaimer · disclosure links                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+What the wireframe asked for, and where it ended up:
+
+| Wireframe element | Decision |
+| --- | --- |
+| Two-column page | Main column capped at 840px; Streamlit's sidebar restyled as the 380px card stack |
+| Stat tiles (NAV, AUM, 1-day return) | **Omitted.** The system never computes a NAV or a return |
+| "Axis Bluechip · Direct Growth" | **Omitted.** Sample data, and not in `data/sources.csv` |
+| "SID Verified" badge | Replaced with **"Source verified"**, which is only shown when a chunk was actually cited |
+| Riskometer at level 5 | Rendered as an explicit **"not in the corpus"** state; the assistant never derives a risk level |
+| Statutory Factsheet card | Filled from the real index: chunk count, scheme count, generator, embedding model, build time |
+| Copy button per answer | **Omitted.** It needs custom JavaScript, and `AGENTS.md` forbids a new dependency |
+| `localStorage` theme persistence | Replaced by `st.session_state` plus Streamlit's own `?theme=` query parameter |
+| Dark-mode switch in the nav | Moved to the sidebar, which is the only place Streamlit can host a real control |
+| Structured highlight tiles | **Omitted.** The backend returns prose, and the brief forbids parsing prose into figures |
+
+Behaviour worth knowing before a demo:
+
+- **Enter sends, Shift+Enter newlines** — that is `st.chat_input`'s default.
+- **An identifier is never sent.** The input is preflighted with `src.pipeline.pii_hits`, and a
+  message containing a PAN, an Aadhaar number, a folio, an email or a phone is dropped with a
+  warning that names the *kind* only. Nothing is stored and nothing is echoed.
+- **A refusal swaps the chips.** After a refusal the three suggested questions become factual ones.
+- **Theme persistence** is per session. A browser reload starts in the default theme.
+- **Accessibility**: a skip link to the conversation, `aria-live="polite"` on the transcript, visible
+  focus rings, and a one-column layout below 900px. The riskometer states its level in text, so it
+  does not rely on colour.
+
 ---
 
 ## What it will and will not answer
@@ -235,6 +284,14 @@ network.
 `config_hash` is a sha256 over the *resolved* settings. It deliberately excludes the path the
 config file was read from, so a clone at any location hashes identically — a fresh-clone rehearsal
 caught it being included, which had made the published value unreproducible for anyone else.
+
+**The `config_hash` above is the `v1.0-class-demo` freeze, and it has since changed.** Phase 15 added
+the wireframe's copy to the `ui` section — nav labels, breadcrumb, sidebar titles, footer text — which
+is presentation only: the embedding model, the retrieval settings, the generation settings and the
+guardrail limits are all still the values the eval report was measured on, and `corpus_hash` is
+unaffected. The current value is `3d2d9c978e64`. `config.lock.json` is deliberately *not* regenerated,
+because it is a record of what the `v1.0-class-demo` tag froze, not an input; nothing reads it at
+runtime. Regenerate it only when a new tag is cut.
 
 ### Frozen configuration
 
@@ -432,6 +489,7 @@ unreproducible for anyone who cloned the repo. Fixed, with a regression test.
 app.py                  Streamlit UI (imports only pipeline, config, models, templates, theme)
 restart-app.ps1         clean local restart: kills the launcher and its child, then waits for health
 config.yaml             every tunable constant; nothing hard-coded in stage modules
+design/stitch/          the Google Stitch wireframes this UI was built from (light and dark)
 data/sources.csv        the source registry — the citation allowlist
 data/raw, data/processed  committed HTML + cleaned snapshots (offline reproducibility)
 data/chroma/            the vector store (rebuildable, not committed)
@@ -439,7 +497,7 @@ eval/checks.py          the eight metrics as pure functions
 eval/run_eval.py        metrics / calibration / ablation harness
 eval/report.md          append-only, dated evidence
 src/                    one module per pipeline stage
-tests/                  578 tests, including the layering enforcement
+tests/                  602 tests, including the layering enforcement
 config.lock.json        the v1.0 freeze record: resolved config, 125 pins, hashes, fetch dates
 docs/                   sources.md, sample_qa.md, demo_script.md, corpus_matrix.md,
                          fallback_transcript.html (printable, for a failed browser or network)
@@ -448,7 +506,7 @@ docs/                   sources.md, sample_qa.md, demo_script.md, corpus_matrix.
 ## Development
 
 ```bash
-.venv\Scripts\python -m pytest -q                          # 578 passed
+.venv\Scripts\python -m pytest -q                          # 602 passed
 .venv\Scripts\python -m pytest -q tests/test_layering.py   # 26 passed
 .venv\Scripts\python -m src.pipeline --help
 ```

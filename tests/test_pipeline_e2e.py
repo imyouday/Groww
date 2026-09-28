@@ -26,7 +26,7 @@ from src import guardrails, store
 from src.config import LlmEnv, load_settings
 from src.generation import GenerationError
 from src.models import DraftAnswer, IndexNotBuiltError, Intent
-from src.pipeline import answer, draft, warm_index
+from src.pipeline import answer, draft, pii_hits, warm_index
 from src.registry import load_registry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -168,6 +168,21 @@ def test_a_pii_probe_echoes_nothing_back(caplog: pytest.LogCaptureFixture) -> No
     assert pan not in result.text
     assert pan not in (result.citation_url or "")
     assert not [record for record in caplog.records if pan in record.getMessage()]
+
+
+def test_the_ui_preflight_names_the_identifier_kind_and_never_the_value() -> None:
+    """`pii_hits` is what the input box calls, so it must return kinds, not the identifier.
+
+    Returning the matched value would put the PAN back on screen in the refusal, which is the leak
+    C2 exists to prevent, so this asserts the kinds are present and the value is absent from the
+    entire result.
+    """
+    pan = "ABCDE1234F"
+    kinds = pii_hits(f"My PAN is {pan} and my email is bob@example.com")
+    assert kinds == ["EMAIL", "PAN"]
+    assert pan not in "".join(kinds)
+    assert "bob@example.com" not in "".join(kinds)
+    assert pii_hits("What is the minimum SIP amount for the HDFC Large Cap fund?") == []
 
 
 def test_a_question_the_corpus_cannot_answer_says_so_instead_of_guessing() -> None:
