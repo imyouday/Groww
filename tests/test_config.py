@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import dataclasses
+import io
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,7 @@ from src.config import (
     REPO_ROOT,
     Settings,
     config_hash,
+    configure_console,
     load_settings,
 )
 from src.models import PipelineError
@@ -264,3 +267,27 @@ def test_invalid_yaml_is_reported_as_config_error(tmp_path: Path) -> None:
 def test_data_directories_are_ensured(settings: Settings) -> None:
     for key in ("raw_dir", "processed_dir", "chroma_dir", "model_cache_dir"):
         assert settings.paths.resolve(key).is_dir(), f"{key} was not created"
+
+
+def test_configure_console_lets_a_cp1252_console_print_the_rupee_sign() -> None:
+    """A Windows console defaults to cp1252, where printing U+20B9 raises UnicodeEncodeError."""
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "stdout", stream)
+        configure_console()
+        print("minimum investment is \u20b9 500", file=stream)
+        stream.flush()
+        printed = stream.buffer.getvalue().decode("utf-8")
+    assert "\u20b9 500" in printed
+
+
+def test_configure_console_is_harmless_without_a_reconfigurable_stream() -> None:
+    """pytest replaces stdout with a capture object that has no reconfigure method."""
+
+    class _NoReconfigure:
+        pass
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "stdout", _NoReconfigure())
+        patch.setattr(sys, "stderr", _NoReconfigure())
+        configure_console()

@@ -26,7 +26,7 @@ from src import guardrails
 from src.config import LlmEnv, load_settings
 from src.generation import GenerationError
 from src.models import DraftAnswer, IndexNotBuiltError, Intent
-from src.pipeline import answer
+from src.pipeline import answer, draft
 from src.registry import load_registry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -304,3 +304,29 @@ def test_golden_answers_are_stable_across_a_fresh_pipeline_call() -> None:
     first = answer(row["question"], PROVIDER, settings)
     second = answer(row["question"], PROVIDER, replace(settings))
     assert first.text == second.text
+
+
+def test_the_draft_command_prints_an_unvalidated_draft(capsys: pytest.CaptureFixture[str]) -> None:
+    """The Phase 7 draft view exists, and says on its face that no guardrail has run."""
+    assert draft("What is the exit load on the HDFC flexi cap fund?", "extractive") == 0
+    printed = capsys.readouterr().out
+    assert "draft      : Exit load" in printed
+    assert "not an Answer" in printed
+
+
+def test_the_draft_command_refuses_a_non_factual_question(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No draft is produced for advice, and the command says why instead of printing nothing."""
+    assert draft("Should I buy the flexi cap fund?", "extractive") == 0
+    printed = capsys.readouterr().out
+    assert "advice_request" in printed
+    assert "No draft is generated" in printed
+
+
+def test_the_draft_command_reports_a_gate_refusal(capsys: pytest.CaptureFixture[str]) -> None:
+    """An unpublished fact family fails the gate, so the draft view must not invent one."""
+    assert draft("Is there a lock-in on the ELSS tax saver fund?", "extractive") == 0
+    printed = capsys.readouterr().out
+    assert "gate       : FAIL" in printed
+    assert "No draft is generated" in printed

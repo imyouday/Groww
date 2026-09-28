@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 import httpx
 from bs4 import BeautifulSoup
 
-from src.config import Settings, load_settings
+from src.config import Settings, configure_console, load_settings
 from src.models import (
     FactFamily,
     LoadedDoc,
@@ -363,6 +363,7 @@ def assert_fact_coverage(
 
 def main(argv: list[str] | None = None) -> int:
     """Load every registered scheme source and print a per-source status table."""
+    configure_console()
     parser = argparse.ArgumentParser(
         prog="python -m src.loading", description="Stage 1: fetch, clean and redact the corpus."
     )

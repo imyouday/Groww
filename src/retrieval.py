@@ -16,7 +16,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from src.config import Settings, load_settings
+from src.config import Settings, configure_console, load_settings
 from src.embedding import embed_query
 from src.intents import EXPECTED_SECTION, FAMILY_LABELS, IntentResult, classify
 from src.models import AssembledContext, FactFamily, GateResult, Intent, ScoredChunk
@@ -407,6 +407,7 @@ def _format_trace(trace: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     """Print the full retrieval trace for one query (NFR-9, architecture.md §19.1)."""
+    configure_console()
     parser = argparse.ArgumentParser(
         prog="python -m src.retrieval",
         description="Trace intent, retrieval, MMR and the grounding gate for one query.",

@@ -116,15 +116,15 @@ Total ≈ 25 h ≈ 4–5 working days for two people. Phases 0–5 are the *offl
 | 2 Registry | ☑ | d017d1a | tests/test_registry.py | sources.csv allowlist |
 | 3 Loading | ☑ | 8a56d80, 8543ea9 | tests/test_loading.py, test_pii.py | PII redaction at ingest |
 | 4 Chunking | ☑ | 170c0a2 | tests/test_chunking.py | 3 variants for ablation A1 |
-| 5 Embed+Store | ☑ | 1b1e0ce, 3b08307 | tests/test_store.py, test_embedding.py | 106 chunks, corpus_hash pinned |
+| 5 Embed+Store | ☑ | 1b1e0ce, 3b08307 | tests/test_store.py (embedding is covered there, not in a separate file) | 106 chunks, corpus_hash pinned |
 | 6 Retrieval | ☑ | da5f087 | tests/test_retrieval.py | hybrid + MMR + grounding gate |
 | 7 Generation | ☑ | 7ab69b3 | tests/test_generation.py | extractive first, LLM optional |
 | 8 Guardrails | ☑ | fc151a0 | tests/test_guardrails.py | V1-V6, build_answer, route, logging policy |
-| 9 End-to-end | ☑ | this commit | tests/test_pipeline_e2e.py | 24/24 golden, 8/8 probes, p95 50ms |
+| 9 End-to-end | ☑ | 5251cdd | tests/test_pipeline_e2e.py | 24/24 golden, 8/8 probes, p95 50ms |
 | 10 UI | ☑ | 1e7a094 | tests/test_ui_smoke.py, tests/test_theme.py | app.py + pipeline warm_index; 3 chips, 1 link, theme toggle |
-| 11 Eval | ☑ | this commit | tests/test_eval.py, eval/report.md | 8/8 metrics pass both providers; τ band (0.8165, 0.8402] is off-grid, so 0.35 stays; A1 chunking worth ~21 pts; A4's 429s absorbed |
-| 12 Deliverables | ☑ | this commit | README acceptance table | 11/12 PRD 16 criteria met; criterion 1 partial (5 of 7 families in corpus, Phase 0 finding) |
-| 13 Rehearsal | ☑ | this commit | config.lock.json, docs/fallback_transcript.html | A–D done; `config_hash` was machine-specific, now fixed; 6/6 probes refused; 0.1 s step time; tag `v1.0-class-demo` |
+| 11 Eval | ☑ | 57918ed | tests/test_eval.py, eval/report.md | 8/8 metrics pass both providers; τ band (0.8165, 0.8402] is off-grid, so 0.35 stays; A1 chunking worth ~21 pts; A4's 429s absorbed |
+| 12 Deliverables | ☑ | b9e71c7 | README acceptance table | 11/12 PRD 16 criteria met; criterion 1 partial (5 of 7 families in corpus, Phase 0 finding) |
+| 13 Rehearsal | ☑ | 7734c51 (`v1.0-class-demo`) | config.lock.json, docs/fallback_transcript.html | A–D done; `config_hash` was machine-specific, now fixed; 6/6 probes refused; 0.1 s step time; tag `v1.0-class-demo` |
 
 ---
 
@@ -135,13 +135,13 @@ Total ≈ 25 h ≈ 4–5 working days for two people. Phases 0–5 are the *offl
 **Why first:** if the corpus does not contain fee/risk/lock-in data in usable text, the chunking decision and the source list both change. Everything downstream is wasted otherwise.
 
 ### Do
-- [ ] Fetch each of the 5 URLs from `PRD.md` §5.1 with a browser-like User-Agent. Save raw responses to `data/raw/spike/{scheme_id}.html|.md`.
-- [ ] For each page, answer by hand: **can you see, in plain text, the values for** expense ratio, exit load, minimum SIP, minimum lump sum, ELSS lock-in, riskometer, benchmark, and how to download statements?
-- [ ] Record for each scheme a matrix: `fact_family × {found_static | found_rendered | not_found}`.
-- [ ] If Groww static HTML is JS-rendered, save a rendered `.md` snapshot (DevTools → copy outer HTML, or the page's own print/PDF export) and mark the source `render: md` in `sources.csv`.
-- [ ] If a fact family is missing for **≥ 3 of 5 schemes**, add official HDFC AMC / AMFI / SEBI pages to the candidate list (fee pages, factsheets, statement guides) and re-test.
-- [ ] Record the decision: final source list + which pages are authoritative for which fact family. This table goes straight into `data/sources.csv` (Phase 2) and PRD §5.1.
-- [ ] Sanity-check PII: note any page region that must be redacted (e.g. broker/bank account boilerplate).
+- [x] Fetch each of the 5 URLs from `PRD.md` §5.1 with a browser-like User-Agent. Save raw responses to `data/raw/spike/{scheme_id}.html|.md`.
+- [x] For each page, answer by hand: **can you see, in plain text, the values for** expense ratio, exit load, minimum SIP, minimum lump sum, ELSS lock-in, riskometer, benchmark, and how to download statements?
+- [x] Record for each scheme a matrix: `fact_family × {found_static | found_rendered | not_found}`. Recorded in `docs/corpus_matrix.md` §2 as `yes / no / n/a / false positive`; the reason for each cell is given rather than a bare flag, which is why the two false-positive rows (lock-in, statements) are distinguishable from a genuine miss.
+- [x] If Groww static HTML is JS-rendered, save a rendered `.md` snapshot (DevTools → copy outer HTML, or the page's own print/PDF export) and mark the source `render: md` in `sources.csv`. Condition did not trigger: all 5 pages are server-rendered (matrix §4.1), so no `render` column exists and none was invented.
+- [x] If a fact family is missing for **≥ 3 of 5 schemes**, add official HDFC AMC / AMFI / SEBI pages to the candidate list (fee pages, factsheets, statement guides) and re-test. Triggered twice over — lock-in and statements were missing for all 5 — and 9 further candidates were fetched and rejected (matrix §3). Their raw responses are still in `data/raw/spike/` as `A1 A2 E2 E3 E5 E6 E7 F1 F2`.
+- [x] Record the decision: final source list + which pages are authoritative for which fact family. This table goes straight into `data/sources.csv` (Phase 2) and PRD §5.1. Recorded in matrix §4; the 5 scheme pages became S1–S5 with S3's URL corrected, and `config.loading.allowed_hosts` lost `hdfcmutualfund.com` in this phase.
+- [x] Sanity-check PII: note any page region that must be redacted (e.g. broker/bank account boilerplate). Matrix §4.4: each scheme page carries a phone/email pattern in broker contact boilerplate, so ingest-time redaction is mandatory — it is enforced in Phase 3 and tested in `tests/test_pii.py`.
 
 ### Files
 - `data/raw/spike/*` (throwaway, but keep for the demo evidence)
@@ -155,9 +155,9 @@ python -c "import pathlib;[print(p, p.stat().st_size) for p in pathlib.Path('dat
 All 5 sources non-empty. Corpus matrix filled in.
 
 ### DoD
-- [ ] All 7 fact families available for **≥ 4 of 5** schemes, or an explicit decision recorded to add sources
-- [ ] Rendered-vs-static documented per source
-- [ ] `docs/corpus_matrix.md` exists and is accurate
+- [x] All 7 fact families available for **≥ 4 of 5** schemes, or an explicit decision recorded to add sources — the second branch: matrix §4.2 reduces the in-scope set to 5 with a stated reason per drop, and keeps `RISKOMETER` and `LOCK_IN` in `fact_terms` so those questions are recognised and answered "not in my sources" instead of guessed.
+- [x] Rendered-vs-static documented per source
+- [x] `docs/corpus_matrix.md` exists and is accurate
 
 ### Watch out
 - Do **not** start Phase 1 before this passes. R1 is the highest-likelihood project-killer.
@@ -198,23 +198,23 @@ whether the fact is in the fetched text. Print the table to stdout.
 **Depends on:** Phase 0. **Estimate:** 1 h. **Refs:** ARCH §5, §6.2, §20.
 
 ### Do
-- [ ] Create the directory tree from `architecture.md` §5.1 (`src/`, `data/*`, `eval/`, `docs/`, `scripts/`, `tests/`).
-- [ ] `requirements.txt` with **pinned** versions (get them by `pip install` then `pip freeze > requirements.txt`):
+- [x] Create the directory tree from `architecture.md` §5.1 (`src/`, `data/*`, `eval/`, `docs/`, `scripts/`, `tests/`).
+- [x] `requirements.txt` with **pinned** versions (get them by `pip install` then `pip freeze > requirements.txt`):
   `streamlit`, `sentence-transformers`, `chromadb==0.5.*`, `beautifulsoup4`, `lxml`, `httpx`, `pyyaml`, `pytest`, `python-dotenv`.
-- [ ] `config.yaml` — transcribe the **entire** reference config from `architecture.md` §20, with short YAML comments.
-- [ ] `src/models.py` — all enums and frozen dataclasses from `architecture.md` §6.2, **verbatim**, plus:
+- [x] `config.yaml` — transcribe the **entire** reference config from `architecture.md` §20, with short YAML comments.
+- [x] `src/models.py` — all enums and frozen dataclasses from `architecture.md` §6.2, **verbatim**, plus:
   - `class PipelineError(Exception)`, `class SourceNotAllowed(PipelineError)`, `class SourceFetchError(PipelineError)`, `class ParseEmptyError(PipelineError)`, `class IndexNotBuiltError(PipelineError)`
   - `class GateResult` (`passed: bool`, `top_score: float`, `threshold: float`, `reason: str`, `covered_terms: list[str]`)
   - `class BuildReport` (per-phase: `sources_ok`, `sources_failed: list[tuple[str, str]]`, `chunk_count`, `chunk_stats: dict`, `warnings: list[str]`, `duration_s: float`, `config_hash: str`, `corpus_hash: str`)
   - `class GenerationSettings`-adjacent config dataclasses under `src/config.py`, not `models.py`.
-- [ ] `src/config.py`:
+- [x] `src/config.py`:
   - `class Settings` (frozen) with nested frozen dataclasses mirroring the YAML exactly.
   - `load_settings(path: Path | None = None) -> Settings` — cached (`functools.lru_cache`), validates required keys, raises `PipelineError` with a precise message on missing/invalid keys.
   - Path resolution relative to the repo root (never CWD-dependent → NFR-10); ensure directories exist.
   - `config_hash()` → sha256 of the canonical JSON dump of the settings (for reproducibility, ARCH §18.3).
-- [ ] `.env.example` with `LLM_API_KEY=`, `LLM_BASE_URL=`, `LLM_MODEL=`, `LOG_QUERIES=false`. `.gitignore`: `.env`, `__pycache__/`, `.pytest_cache/`, `data/models/`, `data/chroma/`.
-- [ ] `src/__init__.py`, `tests/__init__.py` (empty).
-- [ ] Tests: `test_config.py` (loads config.yaml, every section present, hash stable across two loads, missing-key error message).
+- [x] `.env.example` with `LLM_API_KEY=`, `LLM_BASE_URL=`, `LLM_MODEL=`, `LOG_QUERIES=false`. `.gitignore`: `.env`, `__pycache__/`, `.pytest_cache/`, `data/models/`, `data/chroma/`.
+- [x] `src/__init__.py`, `tests/__init__.py` (empty).
+- [x] Tests: `test_config.py` (loads config.yaml, every section present, hash stable across two loads, missing-key error message).
 
 ### Files
 `requirements.txt`, `config.yaml`, `.env.example`, `.gitignore`, `src/__init__.py`, `src/models.py`, `src/config.py`, `tests/test_config.py`, `tests/__init__.py`
@@ -226,10 +226,10 @@ python -m pytest -q
 ```
 
 ### DoD
-- [ ] Settings load with correct nested values printed
-- [ ] `config_hash()` identical across two loads in the same process
-- [ ] pytest green
-- [ ] Commit `Phase 1: scaffold, config, models`
+- [x] Settings load with correct nested values printed
+- [x] `config_hash()` identical across two loads in the same process
+- [x] pytest green
+- [x] Commit `Phase 1: scaffold, config, models` — `a8c50a5`
 
 ### Watch out
 - `Settings` must be frozen and hashable; use tuples for lists that must be immutable.
@@ -276,19 +276,19 @@ and `python -m pytest -q`. Paste the output.
 **Depends on:** Phase 1. **Estimate:** 0.5 h. **Refs:** ARCH §6.1, §20, §13.3 (C1); PRD §5.1, §17.
 
 ### Do
-- [ ] `data/sources.csv` with the exact header from `PRD.md` §13:
+- [x] `data/sources.csv` with the exact header from `PRD.md` §13:
   `source_id,scheme_id,scheme_name,source_type,title,url,publisher,allowed_for_citation,fetched_at,notes`
-- [ ] Populate from the Phase 0 decision: the 5 scheme URLs, plus any HDFC AMC / AMFI / SEBI pages added in Phase 0. `source_id` = `S1`…`S5` for schemes, `E1`, `E2`… for education/refusal links. `allowed_for_citation=false` for education-only sources.
-- [ ] Add a `render` hint column **only if** Phase 0 found rendered content is required (e.g. `render=md`); otherwise leave it out and note that in the README.
-- [ ] `src/registry.py`:
+- [x] Populate from the Phase 0 decision: the 5 scheme URLs, plus any HDFC AMC / AMFI / SEBI pages added in Phase 0. `source_id` = `S1`…`S5` for schemes, `E1`, `E2`… for education/refusal links. `allowed_for_citation=false` for education-only sources. 7 rows: E1 (AMFI) and E2 (Groww Help) are `false`; S1–S5 are `true`. No HDFC/AMFI/SEBI page was added as a corpus source, because Phase 0 rejected all of them.
+- [x] Add a `render` hint column **only if** Phase 0 found rendered content is required (e.g. `render=md`); otherwise leave it out and note that in the README. Left out — the header is exactly the 10 columns above, per Phase 0 §4.1 ("all 5 are server-rendered"). The reason is recorded in `docs/corpus_matrix.md`; the README states the pages are distributor-hosted rather than repeating the column decision.
+- [x] `src/registry.py`:
   - `class Registry` with `sources: tuple[SourceRecord, ...]`, `schemes: dict[str, SchemeInfo]`
   - `load_registry(csv_path: Path | None = None) -> Registry` (cached), strict header validation, duplicate `source_id` → `PipelineError`
   - `is_citation_allowed(url: str) -> bool` — exact-match against allowed URLs (**no prefix matching**: a query must not be able to launder a non-registered URL)
   - `source_by_url(url) -> SourceRecord | None`
-  - `resolve_scheme(text: str) -> str | None` — ordered longest-suffix alias match (`architecture.md` §11.3); `SchemeInfo` holds `scheme_id`, `scheme_name`, `aliases: tuple[str, ...]`, `page_url`, `factsheet_url`
+  - `resolve_scheme(text: str) -> str | None` — ordered longest-suffix alias match (`architecture.md` §11.3); `SchemeInfo` holds `scheme_id`, `scheme_name`, `aliases: tuple[str, ...]`, `page_url`, `factsheet_url` — **deviation**: no per-scheme `factsheet_url`. HDFC's factsheet host returns 403 to a scripted client (Phase 0 §3), so there was no per-scheme URL to record. `config.registry.factsheet_index_url` exists instead and is deliberately empty, and the performance redirect points at the AMFI education URL. See Results.
   - `citation_url_for(source_id) -> str`, `education_url`, `help_url`, `factsheet_index_url` accessors
-- [ ] `src/prompts.py` and `src/templates.py` skeleton with the **exact copy strings** from `PRD.md` §12 (UI disclaimer, refusal message, performance redirect, PII refusal, out-of-corpus message, not-in-corpus message, smalltalk message). Single source of truth: UI and docs both import from `templates.py`.
-- [ ] Tests: `test_registry.py` — header validation, duplicate id rejection, `is_citation_allowed` rejects a lookalike URL (`https://groww.in.evil.example/x`), `resolve_scheme("elss") == "S3"`, `resolve_scheme("tax saver fund") == "S3"`, unknown → `None`.
+- [x] `src/prompts.py` and `src/templates.py` skeleton with the **exact copy strings** from `PRD.md` §12 (UI disclaimer, refusal message, performance redirect, PII refusal, out-of-corpus message, not-in-corpus message, smalltalk message). Single source of truth: UI and docs both import from `templates.py`.
+- [x] Tests: `test_registry.py` — header validation, duplicate id rejection, `is_citation_allowed` rejects a lookalike URL (`https://groww.in.evil.example/x`), `resolve_scheme("elss") == "S3"`, `resolve_scheme("tax saver fund") == "S3"`, unknown → `None`.
 
 ### Files
 `data/sources.csv`, `src/registry.py`, `src/templates.py`, `src/prompts.py`, `tests/test_registry.py`
@@ -300,10 +300,24 @@ python -m pytest -q tests/test_registry.py
 ```
 
 ### DoD
-- [ ] Registry loads, alias resolution works, lookalike URL rejected
-- [ ] Every URL in the CSV is public and from the approved host list
-- [ ] `templates.py` contains all 7 copy strings from PRD §12
-- [ ] Commit `Phase 2: source registry and templates`
+- [x] Registry loads, alias resolution works, lookalike URL rejected
+- [x] Every URL in the CSV is public and from the approved host list
+- [x] `templates.py` contains all 7 copy strings from PRD §12
+- [x] Commit `Phase 2: source registry and templates` — `d017d1a`
+
+### Results
+- The verify command prints `7 S2 True`.
+- **One deviation, recorded rather than hidden.** The spec asked for a per-scheme `factsheet_url`.
+  It does not exist and cannot: HDFC's own factsheet host answers 403 to a non-browser client,
+  which is the `ParseEmptyError`/`R1` trap Phase 0 was written to find. The design that shipped
+  keeps `factsheet_index_url` as a registry-level setting and leaves it **empty**, so no code path
+  can emit an empty or unverified factsheet link. The performance redirect therefore sends the user
+  to `https://www.amfiindia.com/` — an official investor-education page — rather than a factsheet.
+  That is a partial answer to `PRD.md` §12, and the honest description of the performance redirect
+  in `README.md` says "the official factsheet for this scheme has the published figures" followed by
+  an AMFI link, which is accurate about where it sends you.
+- `is_citation_allowed("https://groww.in.evil.example/x")` → `False`, confirmed. This is the single
+  function enforcing constraint C1, and it is exact-match.
 
 ### Watch out
 - `is_citation_allowed` must be **exact string match** on the full URL. This single function is what makes C1 (public sources only) enforceable; a prefix check would allow `https://groww.in/anything`.
@@ -356,14 +370,14 @@ Paste the output.
 **Depends on:** Phase 2. **Estimate:** 2 h. **Refs:** ARCH §7, §14; PRD FR-1…FR-7, C1, C2.
 
 ### Do
-- [ ] `src/pii.py`:
+- [x] `src/pii.py`:
   - `class PIIKind(str, Enum)`: `PAN, AADHAAR, ACCOUNT_NO, OTP, EMAIL, PHONE_IN`
   - `PII_PATTERNS: dict[PIIKind, re.Pattern]` exactly as `architecture.md` §14.1
   - `detect(text: str) -> list[PIIHit]` where `PIIHit = NamedTuple(kind, start, end)` — **never returns matched text**
   - `redact(text: str) -> tuple[str, int]` replacing each match with `[REDACTED:{KIND}]`
   - Guard order matters: Aadhaar/account-number before phone; OTP before account number; PAN first.
   - Unit tests: a PAN, a 12-digit Aadhaar, `+91 98765 43210`, `user@example.com`, "my OTP is 482913", a folio number — each detected with the right kind; a clean financial sentence detected as zero hits (false-positive check: "0.35%" and "Rs 500" must NOT match).
-- [ ] `src/loading.py`:
+- [x] `src/loading.py`:
   - `ALLOWED_HOSTS` read from `settings.loading.allowed_hosts` (never hardcoded)
   - `clean(html: str) -> str` implementing `architecture.md` §7.3 steps 1–5 in order: strip by selector list, convert `h1..h6`→`#`…, `li`→`- `, table rows→`| a | b |`, collapse whitespace, and **raise `ParseEmptyError` if < `settings.loading.min_extracted_chars`**
   - `fetch(url: str) -> str` — httpx, browser UA, timeout/retries/backoff from config, `1.0s` delay between requests, host allowlist check *before* the request (`SourceNotAllowed`)
@@ -372,7 +386,7 @@ Paste the output.
   - `assert_fact_coverage(docs, required) -> list[str]` returning missing fact families as warnings (not a hard failure, but surfaced in the build report and UI)
   - Writes `data/processed/{source_id}.txt`
   - CLI: `python -m src.loading` prints a per-source table: status, chars, redactions, warnings
-- [ ] `tests/test_loading.py`: `clean()` on a small synthetic HTML fixture (heading, list, table, script/style, footer) → assert heading markers, one row per table line, no `<script>` residue; `clean()` on a near-empty page raises `ParseEmptyError`; `fetch()` on a non-allowlisted host raises `SourceNotAllowed` (use `example.com` and assert it fails **before** any network call — mock the client).
+- [x] `tests/test_loading.py`: `clean()` on a small synthetic HTML fixture (heading, list, table, script/style, footer) → assert heading markers, one row per table line, no `<script>` residue; `clean()` on a near-empty page raises `ParseEmptyError`; `fetch()` on a non-allowlisted host raises `SourceNotAllowed` (use `example.com` and assert it fails **before** any network call — mock the client).
 
 ### Files
 `src/pii.py`, `src/loading.py`, `tests/test_pii.py`, `tests/test_loading.py`
@@ -392,10 +406,26 @@ S2         ok            17980   1           pii_redacted
 ```
 
 ### DoD
-- [ ] `data/processed/*.txt` exists for all 5 schemes and contains all 7 fact-family labels
-- [ ] `python -m src.loading` is idempotent (second run reads snapshots, zero network calls)
-- [ ] PII unit tests pass, including the false-positive checks
-- [ ] Commit `Phase 3: loading stage with PII redaction`
+- [x] `data/processed/*.txt` exists for all 5 schemes — **and 5 of the 7 fact-family labels, not 7.** `expense ratio`, `exit load`, `minimum sip` and `benchmark` are present in all five; risk rating is present but the pages never use the word "riskometer"; `lock-in` and `statement` have **zero** occurrences in every file. That is the Phase 0 finding, not a loading bug, and `assert_fact_coverage` reports the two absent families as warnings instead of failing the build.
+- [x] `python -m src.loading` is idempotent (second run reads snapshots, zero network calls) — proven by `test_second_run_makes_no_network_call`, and by `test_raw_snapshot_is_not_overwritten_by_a_second_run`. A live re-run took 3.85 s and produced 5 `ok` rows from snapshots.
+- [x] PII unit tests pass, including the false-positive checks
+- [x] Commit `Phase 3: loading stage with PII redaction` — `8a56d80`, plus `8543ea9` for the follow-on fix that strips returns, NAV and site chrome found in the real corpus
+
+### Results
+- The CLI reports exactly **1 redaction per scheme page**, which independently confirms the Phase 0
+  prediction (matrix §4.4) that each page carries one phone/email pattern in broker contact
+  boilerplate. A prediction made before the code existed was borne out.
+- `tests/test_loading.py` grew well past the spec's three cases, to 45, because cleaning real Groww
+  HTML turned out to be the hard part: the site ships NAV tiles and a cross-fund return comparison
+  that are not markup chrome and would otherwise have entered the index as facts. Six tests pin that
+  removal, and two more pin the converse — prose that *mentions* NAV without asserting a figure must
+  survive. Constraint C2 (no returns in the corpus) is enforced here, at ingest, not at query time.
+- **Correction to the wording above.** This phase said the absent families are "surfaced in the build
+  report and UI". In fact `assert_fact_coverage` is called from the loading CLI only — it prints
+  `coverage: fact family lock_in is absent from every loaded source` (and the same for `statements`).
+  It is *not* wired into `data/build_report.json`, whose `warnings` list is empty. The UI does answer
+  lock-in and statement questions correctly, but via the intent/guardrail templates rather than from
+  this check. The behaviour is right; the plumbing is narrower than the plan claimed.
 
 ### Watch out
 - HTML table rows must survive cleaning — Phase 4 depends on `| a | b |` lines. Verify by eye on one file before moving on.
@@ -448,21 +478,21 @@ Paste both outputs.
 **Depends on:** Phase 3. **Estimate:** 2.5 h. **Refs:** ARCH §8, §15.2; PRD §9.3, FR-8…FR-13.
 
 ### Do
-- [ ] Token counter using the **embedding model's own tokenizer** (`ARCH` §8.2):
+- [x] Token counter using the **embedding model's own tokenizer** (`ARCH` §8.2):
   `@lru_cache get_tokenizer()` → `AutoTokenizer.from_pretrained(settings.embedding.model_id)`; `count_tokens(text) -> int`. If the tokenizer download fails, fall back to `len(text)//4` and warn once.
-- [ ] `parse_sections(text) -> list[Section]` where `Section = NamedTuple(heading, body, ordinal)`, split on `^#{1,6} `.
-- [ ] `classify_section(heading, body) -> SectionType` using the keyword sets in `ARCH` §8.4, checked in the order `TAX → LOCK_IN → RISK → FEES → GENERAL`, with body-level fallbacks (e.g. body containing "exit load" ⇒ `FEES` even under a vague heading).
-- [ ] `split_into_units(section) -> list[Unit]` implementing `ARCH` §8.4: table blocks (repeat header row, never split a row), `Term: value` definition lists, list items, prose paragraphs (split at sentence boundary only if a single paragraph exceeds `max_tokens`).
-- [ ] `chunk_document(doc: LoadedDoc) -> list[ChunkRecord]` — the flush/overlap loop from `ARCH` §8.3. Critical behaviours:
+- [x] `parse_sections(text) -> list[Section]` where `Section = NamedTuple(heading, body, ordinal)`, split on `^#{1,6} `.
+- [x] `classify_section(heading, body) -> SectionType` using the keyword sets in `ARCH` §8.4, checked in the order `TAX → LOCK_IN → RISK → FEES → GENERAL`, with body-level fallbacks (e.g. body containing "exit load" ⇒ `FEES` even under a vague heading).
+- [x] `split_into_units(section) -> list[Unit]` implementing `ARCH` §8.4: table blocks (repeat header row, never split a row), `Term: value` definition lists, list items, prose paragraphs (split at sentence boundary only if a single paragraph exceeds `max_tokens`).
+- [x] `chunk_document(doc: LoadedDoc) -> list[ChunkRecord]` — the flush/overlap loop from `ARCH` §8.3. Critical behaviours:
   - overlap applied **only** to prose sections (`GENERAL`, `RISK` narrative); `FEES` and `TAX` get `overlap = 0`
   - `make_chunk` composes `header = f"[{scheme_name}] {heading}"`, `embed_text = header + "\n" + body`, `text = body` (header **excluded** from `text`)
   - `chunk_id = sha1(f"{source_id}|{heading}|{ordinal}")[:16]`
-- [ ] `merge_small_sections(chunks, min_tokens)` — absorb a chunk below `min_tokens` into the next sibling in the same document, keeping **both** headings in the header.
-- [ ] `drop_boilerplate(section) -> bool` — the three rules in `ARCH` §8.5 (stop-phrase list, <25 tokens with no digits and not FEES/LOCK_IN, link density > 0.6).
-- [ ] `chunk_stats(chunks) -> dict` — count, median, p10, p90, per-`SectionType` counts, dropped, merged (`ARCH` §8.6).
-- [ ] Dump to `data/chunks.jsonl` (one JSON object per line, all `ChunkRecord` fields) for offline inspection and the eval harness.
-- [ ] CLI: `python -m src.chunking --doc S1` prints sections → units → chunks with token counts, and the stats table. `--variant semantic_350|semantic_600|fixed_512` switches the config values **without editing code** (this is ablation A1).
-- [ ] Tests (`tests/test_chunking.py`):
+- [x] `merge_small_sections(chunks, min_tokens)` — absorb a chunk below `min_tokens` into the next sibling in the same document, keeping **both** headings in the header.
+- [x] `drop_boilerplate(section) -> bool` — the three rules in `ARCH` §8.5 (stop-phrase list, <25 tokens with no digits and not FEES/LOCK_IN, link density > 0.6).
+- [x] `chunk_stats(chunks) -> dict` — count, median, p10, p90, per-`SectionType` counts, dropped, merged (`ARCH` §8.6).
+- [x] Dump to `data/chunks.jsonl` (one JSON object per line, all `ChunkRecord` fields) for offline inspection and the eval harness. All 13 `ChunkRecord` fields are present; `overlap_tokens` is deliberately *not* a record field, it is a within-section construction detail.
+- [x] CLI: `python -m src.chunking --doc S1` prints sections → units → chunks with token counts, and the stats table. `--variant semantic_350|semantic_600|fixed_512` switches the config values **without editing code** (this is ablation A1).
+- [x] Tests (`tests/test_chunking.py`) — 38 tests; the six required cases are all present:
   - a synthetic fee page → fee table stays in **one** chunk, no overlap applied, `SectionType.FEES`
   - a synthetic prose page → overlapping tail present, `overlap_tokens` respected within ±10 tokens
   - `chunk_id` is deterministic across two runs and differs when `ordinal` changes
@@ -481,10 +511,29 @@ python -c "import json;print(sum(1 for _ in open('data/chunks.jsonl')))"
 ```
 
 ### DoD
-- [ ] `data/chunks.jsonl` has 80–400 chunks, median token count 150–450, no chunk over `max_tokens`
-- [ ] Every fact family from Phase 0's matrix is present in at least one chunk's text (spot-check by grep on the jsonl)
-- [ ] `--variant fixed_512` produces a visibly different chunk count (evidence for ablation A1)
-- [ ] Commit `Phase 4: semantic section chunker with ablation variants`
+- [x] `data/chunks.jsonl` has 80–400 chunks, median token count 150–450, no chunk over `max_tokens` — measured **106 chunks, median 229, max 254**. Section mix: 79 `fees`, 17 `tax`, 5 `risk`, 5 `general`. All 106 `chunk_id`s unique; no `text` starts with the `[HDFC…]` header.
+- [x] Every fact family from Phase 0's matrix is present in at least one chunk's text (spot-check by grep on the jsonl) — for the 5 families that exist. Lock-in and statements are still absent because they are absent from the sources; `test_every_fact_family_is_retrievable_for_every_scheme` asserts this for the real families.
+- [x] `--variant fixed_512` produces a visibly different chunk count (evidence for ablation A1) — 94 chunks / median 244 / all `general`, versus 106 / 229 / semantically classified.
+- [x] Commit `Phase 4: semantic section chunker with ablation variants` — `170c0a2`
+
+### Results
+- **The 254-token ceiling is the finding that shaped this phase, and it invalidates two of the three
+  planned ablation arms.** `all-MiniLM-L6-v2` accepts 256 tokens minus 2 special tokens, so *every*
+  requested bound is clamped: `semantic_350` → 254, `semantic_600` → 254, `fixed_512` → 254.
+  Consequently `semantic_350` and `semantic_600` produce **byte-identical output** (106 chunks, same
+  section mix) — the 600 arm is not a second data point, it is a duplicate of the 350 arm. The CLI
+  prints the warning rather than hiding it, and two tests pin the behaviour
+  (`test_the_configured_bound_of_600_is_clamped_to_the_models_real_ceiling`,
+  `test_the_ceiling_comes_from_the_model_not_the_tokenizer`). Ablation A1 is therefore really a
+  two-arm comparison — semantic sectioning (106) vs flat fixed-size (94) — and any report that calls
+  it a three-arm sweep is overstating the evidence.
+- The spec's stated bug ("overlap leaking into FEES chunks") is prevented structurally, not by a
+  guard: overlap is a property of `UnitKind`, and only `PROSE` units are overlap-eligible, so a fee
+  table cannot acquire a tail even if a heading is misclassified. `test_the_fee_table_lands_in_one_
+  chunk_with_no_overlap` and `test_a_tax_section_never_gets_overlap` lock it in.
+- `test_a_sentence_line_is_not_mistaken_for_a_labelled_fact` and
+  `test_an_abbreviation_is_not_a_sentence_boundary` document two real failure modes found on Groww's
+  text: "Expense ratio: 0.35%" is a fact, but a sentence that happens to contain a colon is not.
 
 ### Watch out
 - The single most common bug: overlap leaking into `FEES` chunks, which manufactures a chunk that looks like a different fee. Test for it explicitly.
@@ -540,18 +589,18 @@ the chunk count + median token count for each of the three --variant values. Pas
 **Depends on:** Phase 4. **Estimate:** 1.5 h. **Refs:** ARCH §9, §10, §15.1; PRD FR-14…FR-18.
 
 ### Do
-- [ ] `src/embedding.py`: `get_encoder()` `@lru_cache(maxsize=1)` returning `SentenceTransformer(settings.embedding.model_id, cache_folder=settings.paths.model_cache_dir, device=settings.embedding.device)`; `embed(texts) -> np.ndarray` (float32, `normalize_embeddings=True`, `batch_size` from config); `embed_query(text) -> np.ndarray`; `model_id()` accessor.
-- [ ] `src/store.py`:
+- [x] `src/embedding.py`: `get_encoder()` `@lru_cache(maxsize=1)` returning `SentenceTransformer(settings.embedding.model_id, cache_folder=settings.paths.model_cache_dir, device=settings.embedding.device)`; `embed(texts) -> np.ndarray` (float32, `normalize_embeddings=True`, `batch_size` from config); `embed_query(text) -> np.ndarray`; `model_id()` accessor.
+- [x] `src/store.py`:
   - `connect() -> chromadb.Client` via `PersistentClient(path=settings.paths.chroma_dir, settings=chromadb.config.Settings(anonymized_telemetry=False))` — telemetry off is an NFR-7 requirement.
   - `get_collection()` — `get_or_create_collection(name=..., configuration={"hnsw": {"space": "cosine"}}, metadata={...})` with a **version check**: if the installed `chromadb` is `< 0.5`, pass `metadata={"hnsw:space": "cosine"}` instead. Implement as a small helper with a clear error if neither works.
   - `upsert_chunks(chunks: list[ChunkRecord], vectors: np.ndarray) -> int` — ids from `chunk.chunk_id`, documents from `chunk.text`, metadatas per `ARCH` §10.2 (every key listed there, all str/int values — Chroma rejects None).
   - `query(vector, n, scheme_id=None) -> list[ScoredChunk]` — `where={"scheme_id": scheme_id}` when provided, `include=["documents","metadatas","distances"]`, similarity = `max(0.0, 1.0 - distance)`; reconstruct `ChunkRecord` from the document + metadata (note: `fetched_at`, `token_count`, `ordinal` must round-trip — store all of them in metadata).
   - `stats() -> dict` — `count()`, collection name, model id, build timestamp.
   - `reset()` — delete + recreate the collection (used by `--rebuild`).
-- [ ] `src/pipeline.py` (build half only for now): `build(refresh: bool = False, rebuild: bool = False) -> BuildReport` running loading → chunking → embedding → store, and writing `data/chunks.jsonl`. CLI: `python -m src.pipeline build [--refresh] [--rebuild]`.
-- [ ] Persist `data/build_report.json` (the `BuildReport`) and print the summary: sources ok/failed, chunks, median tokens, warnings, `config_hash`, `corpus_hash` (sha256 over sorted chunk ids + content hashes).
-- [ ] Tests (`tests/test_store.py`) using `tmp_path`: upsert 3 fake chunks into a temp Chroma dir, query with a known vector, assert the nearest id and that `similarity` is in `[0,1]`; assert `where={"scheme_id": ...}` filters out other schemes; assert `reset()` empties the collection.
-- [ ] `.gitignore` already excludes `data/chroma/`; **keep `data/raw/` and `data/processed/` committed** (snapshot is the source of truth, `ARCH` §18.1).
+- [x] `src/pipeline.py` (build half only for now): `build(refresh: bool = False, rebuild: bool = False) -> BuildReport` running loading → chunking → embedding → store, and writing `data/chunks.jsonl`. CLI: `python -m src.pipeline build [--refresh] [--rebuild]`.
+- [x] Persist `data/build_report.json` (the `BuildReport`) and print the summary: sources ok/failed, chunks, median tokens, warnings, `config_hash`, `corpus_hash` (sha256 over sorted chunk ids + content hashes).
+- [x] Tests (`tests/test_store.py`) using `tmp_path` — 30 tests: upsert fake chunks into a temp Chroma dir, query with a known vector, assert the nearest id and that `similarity` is in `[0,1]`; assert `where={"scheme_id": ...}` filters out other schemes; assert `reset()` empties the collection; `fetched_at` round-trips.
+- [x] `.gitignore` already excludes `data/chroma/`; **keep `data/raw/` and `data/processed/` committed** (snapshot is the source of truth, `ARCH` §18.1) — confirmed: 6 files tracked under `data/raw`, 6 under `data/processed`, 0 under `data/chroma`.
 
 ### Files
 `src/embedding.py`, `src/store.py`, `src/pipeline.py`, `tests/test_store.py`
@@ -566,10 +615,24 @@ python -m pytest -q tests/test_store.py
 Expected: a build in under 60 s, `count()` equal to the chunk count, and `data/build_report.json` written.
 
 ### DoD
-- [ ] Re-running `build` without `--refresh` performs **zero** network calls
-- [ ] `--rebuild` reproduces the identical chunk count and `corpus_hash`
-- [ ] Query with a `scheme_id` filter returns only that scheme's chunks
-- [ ] Commit `Phase 5: embedding and Chroma vector store, offline build complete`
+- [x] Re-running `build` without `--refresh` performs **zero** network calls — a live re-run took **16.8 s** and wrote `sources_ok: 5, sources_failed: 0, warnings: []`. The guarantee is inherited from the snapshot-first loader rather than asserted at the build level: `test_second_run_makes_no_network_call` in `tests/test_loading.py` is the test that proves it, and there is no separate `test_build_makes_no_network_call`.
+- [x] `--rebuild` reproduces the identical chunk count and `corpus_hash` — verified live: plain build and `--rebuild` both gave `chunk_count: 106` and `corpus_hash: 924af25cea19…` (identical), with the same `config_hash: c6fae467b326…`.
+- [x] Query with a `scheme_id` filter returns only that scheme's chunks — `where={"scheme_id": scheme_id}` at `src/store.py:314`, covered in `tests/test_store.py`.
+- [x] Commit `Phase 5: embedding and Chroma vector store, offline build complete` — `1b1e0ce`, plus `3b08307` for the chromadb 0.5.23 collection-configuration fix described below
+
+### Results
+- `data/build_report.json`: 5 sources ok, 0 failed, **106 chunks**, median 229 tokens, p10 38 / p90 252 / max 254, 0 warnings, 16.8 s, `config_hash c6fae467…`, `corpus_hash 924af25c…`, model `all-MiniLM-L6-v2`, collection `mf_faq_hdfc_v1`, space `cosine`, chromadb 0.5.23.
+- **`anonymized_telemetry=False` was necessary but not sufficient** (NFR-7). The `src/store.py` comment
+  records that on chromadb 0.5.23 the PostHog client is constructed anyway, so the setting alone does
+  not guarantee silence; the code disables it a second way. Worth knowing before anyone upgrades
+  chromadb and assumes the flag is load-bearing on its own.
+- The collection-configuration shim grew a **third** path beyond the two the spec anticipated. The
+  installed 0.5.23 rejects the plain `{"hnsw": {...}}` mapping (no `to_json`), the pre-0.5
+  `metadata={"hnsw:space": ...}` form is still emitted as the fallback, and the working path builds
+  an explicit `HNSWConfigurationInternal` inside a `CollectionConfiguration`. The helper raises a
+  clear `PipelineError` naming both attempted forms if none succeed, which is what the spec asked for.
+- `config_hash` was path-dependent at this point in the project's life and became stable only in
+  Phase 13 (`7734c51`); the value above is the post-fix one.
 
 ### Watch out
 - **Chroma metadata cannot be `None`.** Every key in `ARCH` §10.2 must be a `str`/`int`/`float`/`bool`. Coerce `fetched_at` to a string, `token_count`/`ordinal` to `int`.
@@ -624,7 +687,7 @@ Verify: `python -m src.pipeline build`, then print store.stats(), then
 **Depends on:** Phase 5. **Estimate:** 3 h. **Refs:** ARCH §11, §12; PRD FR-19…FR-26, §11.2 metrics.
 
 ### Do
-- [ ] `src/intents.py`:
+- [x] `src/intents.py`:
   - `classify(query: str) -> IntentResult` with `IntentResult = frozen(NamedTuple)`(`intent: Intent`, `scheme_id: str | None`, `fact_family: FactFamily`, `needs_evidence: bool`, `matched_rule: str`)
   - implement the **ordered, first-match-wins** rule table in `ARCH` §11.2 exactly, in that precedence order: PII → advice → performance → out-of-corpus → smalltalk → factual (fact-family term / scheme alias) → factual with `needs_evidence=True`
   - advice regex must include the `should i|should we|would you|is it (a )?good|recommend|opinion|best (fund|option)|worth (buying|investing)|allocate|portfolio|rebalance|which one should` family
@@ -632,7 +695,7 @@ Verify: `python -m src.pipeline build`, then print store.stats(), then
   - out-of-corpus = a `known_other_amcs` term appears **and** no in-scope scheme alias also appears
   - `resolve_fact_family(query) -> FactFamily` using `settings.retrieval.fact_terms` synonym lists from `ARCH` §20 (longest match wins; `"exit load"` before `"load"`)
   - `has_pii(query) -> list[PIIHit]` delegating to `src/pii.py`
-- [ ] `src/retrieval.py`:
+- [x] `src/retrieval.py`:
   - `contextualise_query(query, scheme_id, fact_family) -> str` — `f"[{scheme_name or 'HDFC mutual fund'}] {fact_family_label} — {query}"`, labels from a constant map (`ARCH` §11.3)
   - `boost(candidates, query, fact_family, scheme_id) -> list[ScoredChunk]` — the exact formula in `ARCH` §11.4 with weights from `settings.retrieval.boosts`; count **distinct** fact terms for the second increment
   - `mmr(candidates, top_n, lambda_) -> list[ScoredChunk]` — hand-rolled numpy implementation per `ARCH` §11.5; mark `mmr_selected=True` on picks
@@ -641,7 +704,7 @@ Verify: `python -m src.pipeline build`, then print store.stats(), then
   - `assemble(context_chunks) -> str` — the numbered `[1] scheme | section | source: url` block format, dedupe by normalised text, respect `context_token_budget`, never truncate the top-1 chunk
   - `retrieve_with_debug(query) -> tuple[AssembledContext | None, dict]` returning the trace dict (`ARCH` §19.1) — the UI and eval harness both need this
   - CLI: `python -m src.retrieval --query "exit load on flexi cap direct growth"` prints intent, scheme, fact family, all 12 candidates with dense/boost/final scores, MMR picks, gate verdict, and the assembled context
-- [ ] Tests (`tests/test_intents.py`, `tests/test_retrieval.py`):
+- [x] Tests (`tests/test_intents.py`, `tests/test_retrieval.py`):
   - intents: 8 out-of-scope probes from `PRD.md` §5.3 map to the right `Intent`; 6 factual questions map to `FACTUAL_FACT` with the right `fact_family`; the ambiguous case *"What is the exit load on the fund I should buy?"* routes to `ADVICE_REQUEST`; `resolve_scheme` via alias
   - retrieval: boost formula unit test (dense 0.5 + one term 0.05 + section match 0.03 = 0.58); MMR returns 5 distinct chunks and prefers a different scheme over a near-duplicate; gate fails at 0.34 and passes at 0.36 with `gate_threshold=0.35`; a high-similarity-but-wrong-fact chunk fails term coverage
 
@@ -659,11 +722,37 @@ python -m pytest -q tests/test_intents.py tests/test_retrieval.py
 The first two must show `FACTUAL_FACT` and the right top-1 section; the third must show `ADVICE_REQUEST` and **zero** retrieval activity.
 
 ### DoD
-- [ ] All 8 out-of-scope probes classified correctly, **before** any retrieval runs
-- [ ] `python -m src.retrieval` trace is readable enough to show on a projector
-- [ ] Boost/MMR/gate unit tests pass
-- [ ] `src/retrieval.py` contains no import of `src/generation.py` (layering test)
-- [ ] Commit `Phase 6: intent gate, hybrid retrieval, MMR, grounding gate`
+- [x] All 8 out-of-scope probes classified correctly, **before** any retrieval runs — the ordered rule table short-circuits, and `Should I buy the flexi cap fund?` reports `refused fast at rule r2_advice; no retrieval performed` with `top_score=0.0000`.
+- [x] `python -m src.retrieval` trace is readable enough to show on a projector — **after a real bug fix made during Phase 13 reconciliation; see Results.**
+- [x] Boost/MMR/gate unit tests pass
+- [x] `src/retrieval.py` contains no import of `src/generation.py` (layering test) — the file contains no occurrence of the string `generation` at all; `tests/test_layering.py` pins it as a mandatory rule.
+- [x] Commit `Phase 6: intent gate, hybrid retrieval, MMR, grounding gate` — `da5f087`
+
+### Results
+- All three Verify queries now exit 0 and route as the plan requires:
+
+  | query | intent | scheme | family | gate |
+  |---|---|---|---|---|
+  | expense ratio of Large Cap | `factual_fact` (r6) | S1 | `expense_ratio` | PASS, top 0.8642 |
+  | lock-in on ELSS | `factual_fact` (r6) | S3 | `lock_in` | FAIL, top 0.6792 |
+  | should I buy flexi cap | `advice_request` (r2) | S2 | — | refused before retrieval |
+
+  `52 passed` in `tests/test_intents.py` + `tests/test_retrieval.py`.
+- **The second query's gate FAIL is the correct product behaviour, not a defect.** The plan expected a
+  "right top-1 section" for it; instead the grounding gate refuses, because `lock_in` is one of the
+  two families the sources never publish. That refusal is what produces the honest
+  "not published for this fund" answer seen in the Phase 13 transcripts. Reading a FAIL here as a
+  broken gate would mean loosening τ, which `architecture.md` §12 explicitly forbids.
+- **Bug found and fixed during this reconciliation.** `python -m src.retrieval --query "<factual>"`
+  crashed with `UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9'` on this Windows
+  console — a *documented Verify command for this very phase*. The trace prints assembled context,
+  and the corpus contains the rupee sign, which cp1252 cannot encode. The failure was in output
+  formatting only: the ranking, boost and gate values were all correct, and forcing
+  `PYTHONIOENCODING=utf-8` produced a perfect trace. Cause: `src/pipeline.py` had carried an inline
+  `sys.stdout.reconfigure(...)` that nothing else shared, so the three other CLIs kept the crash.
+  Fix: a single `configure_console()` in `src/config.py` (the one module every layer may import),
+  called by all four CLI entrypoints, replacing the inline duplicate. Covered by two new tests in
+  `tests/test_config.py`, and the suite is now **572 passed**.
 
 ### Watch out
 - Rule order in `ARCH` §11.2 is safety precedence, not convenience. Do not reorder it "for readability".
@@ -726,7 +815,7 @@ Verify: run the three example queries from this phase and paste the traces, then
 **Depends on:** Phase 6. **Estimate:** 2.5 h. **Refs:** ARCH §6.1, §13.1 L4, §15.3; PRD FR-33, FR-34, D4.
 
 ### Do
-- [ ] `src/generation.py`:
+- [x] `src/generation.py`:
   - `class Generator(Protocol)` with `generate(context: AssembledContext, question: str, intent: Intent) -> DraftAnswer`
   - `class ExtractiveGenerator`:
     - sentence-split the top chunk's text (abbreviation-aware)
@@ -738,31 +827,52 @@ Verify: run the three example queries from this phase and paste the traces, then
     - `timeout_s` from config, **1 retry**, then raise `GenerationError`
     - parses the response, passes `raw_model_output` through for debugging only, extracts the `REFUSE`/`NOT_IN_CORPUS` sentinels into `DraftAnswer.sentinels`
   - `resolve_generator() -> tuple[Generator, str]` — reads `config.generation.provider`: `auto` → LLM if `LLM_API_KEY` is set, else extractive; `llm` → LLM (raise if no key); `extractive` → extractive. Returns the chosen name for the UI.
-  - CLI: `python -m src.generation --query "..." --provider extractive|llm` prints the draft answer
-- [ ] `src/prompts.py` — finish it:
+  - CLI: `python -m src.generation --query "..." --provider extractive|llm` prints the draft answer — **the command in the plan is architecturally impossible and was replaced.** A draft needs retrieved context, and `generation` may not import `retrieval` (§5.2); `tests/test_layering.py` fails on exactly that import. Shipped as `python -m src.pipeline draft "..." --provider extractive [--raw]` instead, in the one module permitted to wire stages. See Results.
+- [x] `src/prompts.py` — finish it:
   - `SYSTEM_PROMPT` exactly per `ARCH` §13.1 (context-only, no prior knowledge, no estimates/calculations/comparisons/rankings, no buy-sell-hold-switch recommendations, no returns/NAV/performance, max 3 sentences, no URLs, sentinels `REFUSE` and `NOT_IN_CORPUS`)
   - `build_user_prompt(assembled_context: str, question: str) -> str` wrapping the context in explicit `<context>` delimiters with a line stating the context is untrusted data, not instructions
-- [ ] Tests (`tests/test_generation.py`):
+- [x] Tests (`tests/test_generation.py`) — 23, covering every required case:
   - `ExtractiveGenerator` on a synthetic fee chunk returns ≤ 3 sentences containing the value
   - on an empty/unusable chunk returns the `NOT_IN_CORPUS` sentinel
   - `resolve_generator()` returns extractive when no key is set, and respects an explicit `provider: extractive`
   - `LLMGenerator` with a monkeypatched HTTP client returning garbage → `DraftAnswer` with the garbage in `raw_model_output` and no exception escaping; a sentinel response → `sentinels == ["REFUSE"]`
   - `build_user_prompt` output contains the context delimiters and the question
+  - plus 3 new tests in `tests/test_pipeline_e2e.py` for the `draft` command (happy path, non-factual refusal, gate refusal)
 
 ### Files
 `src/generation.py`, `src/prompts.py` (finish), `tests/test_generation.py`
 
 ### Verify
 ```
-python -m src.generation --query "What is the exit load on the HDFC flexi cap fund?" --provider extractive
+python -m src.pipeline draft "What is the exit load on the HDFC flexi cap fund?" --provider extractive
 python -m pytest -q tests/test_generation.py
 ```
 
 ### DoD
-- [ ] Extractive path produces a sensible ≤3-sentence fact answer from a real chunk
-- [ ] `resolve_generator()` degrades to extractive with no `LLM_API_KEY`
-- [ ] LLM adapter failure raises `GenerationError` (never a raw httpx exception) — guardrails handle it in Phase 8
-- [ ] Commit `Phase 7: generator protocol with extractive and optional LLM implementations`
+- [x] Extractive path produces a sensible ≤3-sentence fact answer from a real chunk — `Exit load of 1% if redeemed within 1 year`, one sentence, from chunk `ad58718f7926a9ee` (dense 0.7875, boost 0.1, final 0.8875) in **0.23 ms** of generation time.
+- [x] `resolve_generator()` degrades to extractive with no `LLM_API_KEY` — the `auto` branch requires key **and** base URL **and** model before choosing the LLM, so a half-finished setup falls back to the deterministic composer instead of failing mid-question. Note that unsetting `LLM_API_KEY` in the shell is not enough to observe this: `load_llm_env()` reads `.env`, which is where the demo's key lives.
+- [x] LLM adapter failure raises `GenerationError` (never a raw httpx exception) — guardrails handle it in Phase 8. `src/generation.py` catches httpx failures into `_RetryableError`, retries once, then raises `GenerationError`; a non-JSON body raises `GenerationError("LLM response body was not valid JSON")`.
+- [x] Commit `Phase 7: generator protocol with extractive and optional LLM implementations` — `7ab69b3`
+
+### Results
+- **The Verify command in this phase had never worked, and it failed silently.** `src/generation.py`
+  has no `__main__` block, so `python -m src.generation --query "..." --provider extractive` imported
+  the module, printed nothing, and **exited 0** — which reads as success in a script. Only
+  `chunking`, `loading`, `retrieval` and `pipeline` ever had CLIs. The capability was never missing
+  (`pipeline ask --provider extractive` answered correctly all along), but the phase's own
+  verification step was a no-op for as long as it stood, which is how a gap of this kind survives
+  thirteen phases.
+- **It cannot be implemented where the plan put it.** Adding a CLI to `src/generation.py` requires
+  calling `retrieve()`, and §5.2 forbids `generation` from importing `retrieval` because generation
+  sits downstream of retrieval. Adding it that way failed
+  `test_module_imports_only_from_lower_layers[generation]` with
+  `imports ['intents', 'retrieval'], which is not allowed`. The honest resolution is
+  `python -m src.pipeline draft`, in the module the architecture designates as the only place stages
+  are wired together. The plan's literal command should be read as superseded, not as pending.
+- The `draft` view deliberately prints a warning that the text is **not** an `Answer`, because the
+  whole point of the `DraftAnswer` boundary is that nothing user-facing exists before Phase 8. It
+  also short-circuits on non-factual intents and on a gate refusal rather than printing an empty
+  draft, so the two "no draft" outcomes are distinguishable from each other.
 
 ### Watch out
 - Extractive first is not optional: it is the demo's zero-key mode (D4) and the LLM's safety net.
@@ -850,10 +960,12 @@ corpus rather than a synthetic chunk:
 - "Min." is in the abbreviation list because "Min. for SIP" / "₹100" is the minimum-SIP fact; without
   it the pairing was undone by the sentence splitter and the term-bearing half lost its label.
 
-Also note: the live Groq endpoint returns Cloudflare `403 / error code 1010` from this machine, which
-is a WAF block rather than an auth failure (an invalid key is `401`). The configured model id
-`qwen/qwen3.8-27b` is therefore still unverified. The LLM adapter is tested against a stubbed HTTP
-client, which is the only correct way to test it offline in any case.
+Also note: at the time of this phase the live Groq endpoint returned Cloudflare `403 / error code 1010`
+from this machine, which is a WAF block rather than an auth failure (an invalid key is `401`), so the
+configured model id was left unverified here. **That is no longer true:** Phases 11–12 reached the
+endpoint successfully and the `llm` provider produced real answers in the eval runs, so the model id
+is confirmed. The LLM adapter is still tested against a stubbed HTTP client, which is the only correct
+way to test it offline in any case.
 
 ---
 
@@ -863,7 +975,7 @@ client, which is the only correct way to test it offline in any case.
 **Depends on:** Phase 7. **Estimate:** 2 h. **Refs:** ARCH §13, §14.3; PRD FR-29…FR-34, C1–C7.
 
 ### Do
-- [ ] `src/guardrails.py`:
+- [x] `src/guardrails.py`:
   - `V1_sentinels(draft) -> str | None` — returns `"refusal"` / `"not_in_corpus"` / `None`
   - `V2_length(text, max_sentences=3) -> bool` — abbreviation-aware sentence count
   - `V3_on_topic(text, context) -> bool` — ≥5 words and ≥1 fact-term or top-chunk vocabulary hit
@@ -873,8 +985,8 @@ client, which is the only correct way to test it offline in any case.
   - `validate(draft, context, intent) -> tuple[DraftAnswer, str]` — run V1→V6 **in order**, first failure returns the verdict key (e.g. `"v4_numeric"`) for the trace; on V2–V6 failure the caller re-runs `ExtractiveGenerator`
   - `build_answer(draft, context, intent, registry) -> Answer` — the **only** place an `Answer` is constructed: picks the template by `kind`, sets `citation_url` from the **top chunk's url** (asserted against `registry.is_citation_allowed`, else `None`), sets `last_updated` from the top chunk's `fetched_at`, populates `retrieved` and `trace`
   - `route(intent, gate_result, context) -> Answer` for all non-factual kinds, using the templates from `src/templates.py` and the registry's `education_url` / `help_url` / `factsheet_index_url` / scheme `page_url` / `factsheet_url`
-- [ ] Finish `src/pipeline.py`: `answer(query) -> Answer` now does the full flow — PII check → `intents.classify` → non-factual short-circuit (**no retrieval, no LLM**) → `retrieval.retrieve_with_debug` → gate → `generation.resolve_generator().generate` → `guardrails.validate` → extractive retry on validation failure → `guardrails.build_answer`.
-- [ ] Tests (`tests/test_guardrails.py`) — these are the acceptance tests for the safety claims:
+- [x] Finish `src/pipeline.py`: `answer(query) -> Answer` now does the full flow — PII check → `intents.classify` → non-factual short-circuit (**no retrieval, no LLM**) → `retrieval.retrieve_with_debug` → gate → `generation.resolve_generator().generate` → `guardrails.validate` → extractive retry on validation failure → `guardrails.build_answer`.
+- [x] Tests (`tests/test_guardrails.py`) — these are the acceptance tests for the safety claims:
   - V4: context contains `0.35%`; a draft saying `0.45%` **fails**; the same draft from the extractive generator **passes**
   - V4: a draft inventing `3 years` when the context says `3 years` verbatim passes, but `5 years` fails
   - V5: "You should consider this fund" is rejected; a neutral factual sentence passes
@@ -884,7 +996,7 @@ client, which is the only correct way to test it offline in any case.
   - `answer("Should I buy the ELSS?")` → `kind == "refusal"`, `education_url` present, and **no LLM call was made** (assert with a monkeypatched generator that raises if invoked)
   - `answer("my PAN is ABCDE1234F")` → `kind == "pii_refusal"` and the PAN string appears nowhere in `str(answer)`
   - `answer("What is the 1 year return of the large cap fund?")` → `kind == "performance_redirect"` with a factsheet link and no return figure anywhere in the text
-- [ ] Add a logging filter so `LOG_QUERIES=false` (default) never writes query text or PII to stdout.
+- [x] Add a logging filter so `LOG_QUERIES=false` (default) never writes query text or PII to stdout.
 
 ### Files
 `src/guardrails.py`, `src/pipeline.py` (finish `answer`), `tests/test_guardrails.py`
@@ -902,11 +1014,36 @@ python -m pytest -q tests/test_guardrails.py
 The last three must print refusal/redirect text with a link and **must not** produce a fabricated figure.
 
 ### DoD
-- [ ] All 4 CLI questions return an `Answer` with the correct `kind`
-- [ ] Every answer has ≤ 3 sentences, a `last_updated` from the source registry, and at most one citation
-- [ ] Refusals happen with no LLM invocation (proved by a test)
-- [ ] V4 numeric validator is tested with both a passing and a failing case
-- [ ] Commit `Phase 8: guardrail validators and answer rendering`
+- [x] All 4 CLI questions return an `Answer` with the correct `kind` — and all 5 Verify questions do. Live run: `factual` (llm, cited, `last_updated 2026-09-27`), `not_in_corpus`, `refusal`, `performance_redirect`, `pii_refusal`.
+- [x] Every answer has ≤ 3 sentences, a `last_updated` from the source registry, and at most one citation — `V2_length` returns `True` for all five live answers; `last_updated` is the CSV `fetched_at` (`2026-09-27`), not today's date; each answer carries exactly one registered URL.
+- [x] Refusals happen with no LLM invocation (proved by a test) — `test_advice_is_refused_with_an_education_link_and_no_generator_call`, and `test_logging_a_refusal_records_counts_and_no_identifier`.
+- [x] V4 numeric validator is tested with both a passing and a failing case — `test_a_grounded_percentage_passes` / `test_an_invented_percentage_fails`, plus `test_an_invented_lock_in_period_fails`, `test_a_grounded_rupee_amount_passes_and_an_invented_one_fails`, and `test_parsed_numbers_are_not_accepted` (0.450 must not pass against 0.45).
+- [x] Commit `Phase 8: guardrail validators and answer rendering` — `fc151a0`
+
+### Results
+- All nine required acceptance cases are present in `tests/test_guardrails.py` (52 tests total), and
+  the live Verify block behaves as the plan demands: the last three questions print refusal or
+  redirect text **with a link**, and none of them contains a fabricated figure. The PAN `ABCDE1234F`
+  appears nowhere in the reply, and `generator: none` on all four non-factual answers.
+- **One piece of user-facing copy is imprecise, and it traces back to the Phase 2 factsheet gap.** The
+  performance redirect reads "The official factsheet for this scheme has the published figures:" and
+  then links to the **scheme page**, not a factsheet — because HDFC's factsheet host returns 403 to a
+  scripted client, so no factsheet URL was ever available (see Phase 2 Results). The link is real,
+  registered and public, so constraint C1 holds and nothing unsafe is emitted; the wording is simply
+  a little grander than the destination. It is left as-is deliberately: the string comes verbatim
+  from `PRD.md` §12 via `config.yaml`, and `templates.py` is the single source of truth for that
+  copy. Changing it here would silently fork the PRD, which is a worse trade than a slightly loose
+  adjective. Worth fixing in the PRD, not in the code.
+- `tests/test_guardrails.py` is stricter than the plan asked for in two places worth knowing about:
+  `test_a_banned_word_inside_a_verbatim_corpus_sentence_is_not_a_hit` and
+  `test_a_tax_rule_from_the_corpus_is_not_a_hit_either`. V5 is a check on *model phrasing*, not on
+  corpus text, so a banned word that legitimately appears in a retrieved sentence (an ELSS lock-in
+  rule, say) must not trip it — otherwise the validator would punish the corpus for containing the
+  word "lock-in".
+- The logging filter (`LOG_QUERIES=false` by default) is enforced by an allowlist of fields rather
+  than a denylist of queries, and `test_the_allowlist_excludes_the_assembled_context` proves the
+  retrieved text cannot leak into a log record either. That is why `LOG_QUERIES=true` is a
+  deliberate, test-covered decision rather than a debugging convenience.
 
 ### Watch out
 - `build_answer` must never take the URL from the draft text. This is the single function that makes C5 enforceable (`ARCH` A-04).
@@ -1309,14 +1446,15 @@ python -m pytest -q tests/test_eval.py
 - [x] All 8 metrics computed and printed; targets met per PRD §11.2
 - [x] τ calibrated by code, not by guess, and recorded
 - [x] A1–A4 tables in `eval/report.md`
-- [ ] Commit `Phase 11: eval harness, threshold calibration, ablations`
+- [x] Commit `Phase 11: eval harness, threshold calibration, ablations` — `57918ed`
 
 ### Results
 - All 8 PRD §11.2 metrics pass on both providers (24 golden + 8 probes, 32 rows): answer correctness
   1.0, citation validity 1.0, top-1 retrieval hit 1.0, refusal precision 1.0, refusal recall 1.0,
-  length compliance 1.0, PII leakage 0, grounding-gap rate 0. Median latency 38 ms extractive,
-  788 ms with the LLM. The metrics pass was run twice, once per provider, so no number in
-  `eval/report.md` comes from a single lucky run.
+  length compliance 1.0, PII leakage 0, grounding-gap rate 0. Median latency at the time of this phase
+  was 38 ms extractive and 788 ms with the LLM; the final runs behind the README are 42/57 ms
+  extractive and 812/1326 ms LLM, and the pass/fail verdicts are identical across all of them. The
+  metrics pass was run per provider, so no number in `eval/report.md` comes from a single lucky run.
 - **τ was calibrated by code and the calibration says: do not move it.** The §12 procedure sweeps
   τ ∈ {0.20 … 0.60} and finds no admissible value, because `t_i` (best irrelevant score) sits at
   0.67–0.82 and clears every threshold in the grid. The scores *are* cleanly separable — the band is
@@ -1361,7 +1499,8 @@ python -m pytest -q tests/test_eval.py
   `warm_index()` on its *second* call in a process. A demo machine starting cold actually pays
   **10.5 s**, of which 4.4 s is `warm_index()` and the rest is importing `sentence_transformers` and
   `torch`; a repeat `warm_index()` is 0.02 s, the first answer after warm-up is 102 ms, and
-  steady-state is 38 ms. The README now states which measurement is which.
+  steady-state is 42 ms median / 57 ms p95 in the final eval run (an earlier run measured 38/50).
+  The README now states which measurement is which.
 - The rebuild run to verify the README's setup command reproduced `corpus_hash` `924af25c…`
   **exactly**, which is the reproducibility claim in its strongest form: same committed snapshots,
   same 106 chunks, same content hash. `config_hash` moved to `75ee0d1fb6b6…` because Phase 10 added
@@ -1446,7 +1585,7 @@ value and note the justification in eval/report.md — but never relax the gate 
 - [x] `docs/demo_script.md` — the timed ≤3-minute script from `PRD.md` §14, with the exact questions to type, the expected answer, and what to point at on screen (sources panel, eval table, ablation A1 result).
 - [x] `AGENTS.md` — the conventions block from §0.3.
 - [x] Verify every PRD §16 acceptance checkbox by hand and tick it in the README's "Acceptance" section.
-- [ ] Commit.
+- [x] Commit. — `b9e71c7`
 
 ### Files
 `README.md`, `docs/sources.md`, `docs/sample_qa.md`, `docs/demo_script.md`, `AGENTS.md`
@@ -1464,7 +1603,7 @@ python eval/run_eval.py --mode metrics
 - [ ] Every setup command in the README was executed verbatim by someone other than the author — **not met, and not met honestly**: the author ran every command (`build`, `ask`, `metrics`, `streamlit run`) but no second person has repeated it. The genuine fresh-eyes check is a fresh clone, which is Phase 13's job; until that run happens this box stays unticked.
 - [x] `docs/sample_qa.md` answers are verbatim app output, not written by hand
 - [x] All PRD §16 boxes ticked with evidence
-- [ ] Commit `Phase 12: deliverables pack`
+- [x] Commit `Phase 12: deliverables pack` — `b9e71c7`
 
 ### Watch out
 - `docs/sample_qa.md` must be generated, not composed. Hand-written answers break the "every answer is cited corpus output" story.
@@ -1536,7 +1675,7 @@ python eval/run_eval.py --mode metrics
 - [x] Adversarial probes: 6/6 refused or redirected, zero fabricated figures, zero prompt leakage
 - [x] Demo script completes twice within 3 minutes
 - [ ] Fallback artifacts exist (recording + terminal transcript) — **half met, and the half I cannot do is stated rather than faked**: the transcript exists and is generated from a real run; a screen recording is a human action and was not captured. See Results.
-- [ ] Commit `Phase 13: rehearsal hardening and v1.0 freeze`
+- [x] Commit `Phase 13: rehearsal hardening and v1.0 freeze` — `7734c51`, tagged `v1.0-class-demo`
 
 ### Results
 

@@ -29,11 +29,12 @@ from typing import Any
 import numpy as np
 
 from src import chunking, embedding, guardrails, loading, store, templates
-from src.config import Settings, config_hash, load_llm_env, load_settings
+from src.config import Settings, config_hash, configure_console, load_llm_env, load_settings
 from src.generation import ExtractiveGenerator, resolve_generator
 from src.intents import classify, has_pii
 from src.models import (
     Answer,
+    AssembledContext,
     BuildReport,
     ChunkRecord,
     DraftAnswer,
@@ -43,7 +44,7 @@ from src.models import (
     PipelineError,
 )
 from src.registry import load_registry
-from src.retrieval import NON_FACTUAL, retrieve_with_debug
+from src.retrieval import NON_FACTUAL, retrieve, retrieve_with_debug
 
 VECTOR_DUMP_WIDTH = 100
 VECTOR_DUMP_TEXT_WIDTH = 86
@@ -596,10 +597,59 @@ def ask(query: str, provider: str | None = None, debug: bool = False) -> int:
 
 
 
+def draft(
+    query: str,
+    provider: str | None = None,
+    raw: bool = False,
+    settings: Settings | None = None,
+) -> int:
+    """Print the unvalidated DraftAnswer for one question, stopping short of the guardrails.
+
+    This lives in the pipeline rather than beside the generator because a draft needs retrieved
+    context, and `src/generation.py` may not import `src/retrieval.py` (architecture.md §5.2):
+    generation sits downstream of retrieval, so the edge is forbidden. The command is the
+    `python -m src.generation --query ...` of the Phase 7 plan, reachable only through the one
+    module allowed to wire the stages together.
+    """
+    resolved = settings if settings is not None else load_settings()
+    if provider is not None:
+        resolved = replace(
+            resolved, generation=replace(resolved.generation, provider=provider)
+        )
+    try:
+        intent = classify(query)
+        if intent.intent is not Intent.FACTUAL_FACT:
+            print(f"intent     : {intent.intent.value}  (rule {intent.matched_rule})")
+            print("No draft is generated: only factual questions reach the generator.")
+            return 0
+        result = retrieve(query, resolved)
+        if not isinstance(result, AssembledContext):
+            print(f"gate       : FAIL ({result.reason})")
+            print("No draft is generated: the grounding gate refused the context.")
+            return 0
+        generator, name = resolve_generator(resolved)
+        answer_draft = generator.generate(result, query, intent.intent)
+    except PipelineError as exc:
+        print(f"error: {exc}")
+        return 2
+
+    print(f"provider   : {name}")
+    print(f"generator  : {answer_draft.generator}")
+    print(f"sentinels  : {','.join(answer_draft.sentinels) if answer_draft.sentinels else '-'}")
+    print(f"draft      : {answer_draft.text}" if answer_draft.text else "draft      : (empty)")
+    print("")
+    print("This is a DraftAnswer, not an Answer. The Phase 8 guardrails have not run, so there is")
+    print("no citation check, no sentence-count check and no advice-language check behind it.")
+    if raw and answer_draft.raw_model_output is not None:
+        print("")
+        print("raw model output:")
+        print(answer_draft.raw_model_output)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run a pipeline command and print its summary, returning a process exit code."""
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    configure_console()
     parser = argparse.ArgumentParser(
         prog="python -m src.pipeline",
         description="Offline build pipeline for the MF FAQ assistant.",
@@ -632,6 +682,23 @@ def main(argv: list[str] | None = None) -> int:
     answer_parser.add_argument(
         "--debug", action="store_true", help="print the full Answer.trace as JSON"
     )
+    draft_parser = subparsers.add_parser(
+        "draft",
+        help="print the unvalidated DraftAnswer for one question, before guardrails",
+    )
+    draft_parser.add_argument("query", nargs="?", help="the user's question")
+    draft_parser.add_argument("--query", dest="query_flag", default=None, help="the user's question")
+    draft_parser.add_argument(
+        "--provider",
+        choices=("auto", "llm", "extractive"),
+        default=None,
+        help="override config.generation.provider for this run",
+    )
+    draft_parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="also print the model's unvalidated raw output, for debugging",
+    )
     arguments = parser.parse_args(argv)
     settings = load_settings()
     configure_logging()
@@ -639,6 +706,11 @@ def main(argv: list[str] | None = None) -> int:
         path = dump(settings)
         print(f"wrote {path} ({path.stat().st_size / 1024:.0f} KB)")
         return 0
+    if arguments.command == "draft":
+        query_text = arguments.query_flag or arguments.query
+        if not query_text:
+            parser.error("draft requires a question, positionally or via --query")
+        return draft(query_text, arguments.provider, arguments.raw, settings)
     if arguments.command == "ask":
         query_text = arguments.query_flag or arguments.query
         if not query_text:

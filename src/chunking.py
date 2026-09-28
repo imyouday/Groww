@@ -28,7 +28,7 @@ from typing import NamedTuple
 
 from huggingface_hub import hf_hub_download
 
-from src.config import Settings, load_settings
+from src.config import Settings, configure_console, load_settings
 from src.loading import load_all
 from src.models import ChunkRecord, LoadedDoc, SectionType
 from src.registry import Registry, load_registry
@@ -881,6 +881,7 @@ def chunk_all(
 
 def main(argv: list[str] | None = None) -> int:
     """Chunk one source or the whole corpus and print the sections, units, chunks and stats."""
+    configure_console()
     parser = argparse.ArgumentParser(
         prog="python -m src.chunking", description="Stage 2: chunk the cleaned corpus."
     )

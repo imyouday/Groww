@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from functools import lru_cache
@@ -467,6 +468,24 @@ def _load_settings(resolved_path: str) -> Settings:
 def load_settings(path: Path | str | None = None) -> Settings:
     """Load, validate and freeze config.yaml. Cached per resolved path."""
     return _load_settings(str(Path(path).resolve()) if path is not None else str(DEFAULT_CONFIG_PATH))
+
+
+def configure_console() -> None:
+    """Make stdout and stderr able to print the corpus' own currency symbols.
+
+    The corpus contains U+20B9, and a Windows console defaults to cp1252, where printing it raises
+    UnicodeEncodeError and destroys output that was otherwise correct. Every CLI entrypoint calls
+    this before it prints. Unencodable characters are replaced rather than fatal, so a trace stays
+    readable on a terminal that cannot represent the text at all.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            continue
 
 
 def config_hash(settings: Settings | None = None) -> str:

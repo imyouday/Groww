@@ -184,10 +184,12 @@ Latest run, `config_hash c6fae467b326`. The eight metrics come out identical on 
 | pii_leakage | 0 | ≤ 0 | 32 | yes |
 | grounding_gap_rate | 0 | ≤ 0 | 24 | yes |
 
-Median latency **38 ms** extractive (p95 50 ms), **783 ms** with the LLM (p95 1308 ms, which includes
+Median latency **42 ms** extractive (p95 57 ms), **812 ms** with the LLM (p95 1326 ms, which includes
 the rate-limited rows that fell back to extractive). Every number, plus the labelled `s_i`/`t_i`
 scores behind the sweep and all four ablation tables, is in [`eval/report.md`](eval/report.md). That
-file is append-only and dated: runs are added, never edited out.
+file is append-only and dated: runs are added, never edited out. An earlier run minutes before this
+one measured 783 ms / 1308 ms with the same eight metrics, which is the spread you should expect from
+a shared endpoint.
 
 The eight metrics are pure functions over prediction rows in `eval/checks.py`, and they are tested
 with synthetic rows that are *wrong* in specific ways — a metric that has only ever seen perfect
@@ -261,8 +263,8 @@ Both hashes are recorded in `data/build_report.json` and reprinted by `python -m
 | — of which `warm_index()` on first call | 4.4 s |
 | — repeat `warm_index()` call | 0.02 s |
 | First answer after warm-up | 102 ms |
-| Steady-state answer latency | 38 ms median, 50 ms p95 (32-row eval run) |
-| Answer latency with the LLM | 783 ms median, 1308 ms p95 |
+| Steady-state answer latency | 42 ms median, 57 ms p95 (32-row eval run) |
+| Answer latency with the LLM | 812 ms median, 1326 ms p95 |
 
 The 10.5 s is the honest number for a demo machine starting cold: it is dominated by importing
 `sentence_transformers` and `torch`, not by the corpus — which is 106 chunks, not 106,000. Once the
