@@ -254,6 +254,18 @@ def choice_for(theme: Theme, toggled: bool = False) -> ThemeChoice:
     return ThemeChoice(theme=theme, label=toggle_label(theme), toggled=toggled)
 
 
+def from_toggle(toggled: bool) -> Theme:
+    """Return the theme a toggle widget's value means: on is dark, off is light.
+
+    The sidebar reruns whenever this disagrees with the stored preference, so the two must be able
+    to agree. They were crossed once — the stored theme was mapped back through the toggle's sense
+    instead of read from it — and the app rerendered itself forever, pinning a core at 100% while
+    accepting requests it never answered. `toggled` is the widget's answer to "is dark mode on", so
+    that question is what this returns the consequence of, in one place.
+    """
+    return Theme.DARK if toggled else Theme.LIGHT
+
+
 def variables(palette: dict[str, str]) -> str:
     """Render a palette as CSS custom property declarations, in token order."""
     return "\n".join(f"  --mf-{token}: {palette[token]};" for token in TOKENS)

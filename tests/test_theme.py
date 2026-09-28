@@ -86,6 +86,29 @@ def variables_of(palette: dict[str, str]) -> str:
     return "\n".join(f"  --mf-{token}: {palette[token]};" for token in theme.TOKENS)
 
 
+def test_the_toggle_settles_in_one_step_instead_of_looping() -> None:
+    """The sidebar reruns when the toggle disagrees with the theme, so the two must be able to agree.
+
+    The two were crossed once: the stored theme was mapped back through the toggle's sense instead
+    of read from it, so each rerun flipped the preference and the next one flipped it back. The app
+    pinned a core at 100% and never answered a request, while every palette test stayed green.
+    """
+    for start in theme.Theme:
+        # What app._sidebar computes: the toggle renders `value=` from the current theme, so an
+        # untouched widget returns the current theme's own state. The bug was a closed cycle, which
+        # never breaks, so assert it breaks rather than merely asserting where it lands.
+        current = start
+        settled = False
+        for _ in range(5):
+            toggled = current is theme.Theme.DARK
+            chosen = theme.from_toggle(toggled)
+            if chosen is current:
+                settled = True
+                break
+            current = chosen
+        assert settled, f"{start.value} reruns forever"
+
+
 def test_stylesheet_is_a_single_injectable_style_block() -> None:
     css = theme.stylesheet()
     assert css.startswith("<style>") and css.rstrip().endswith("</style>")

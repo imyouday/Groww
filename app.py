@@ -118,7 +118,7 @@ def _sidebar(facts: dict[str, object]) -> None:
         st.header("Appearance")
         current = theme.resolve_theme(st.session_state.get("theme", theme.DEFAULT_THEME.value))
         toggled = st.toggle(theme.toggle_label(current), value=current is Theme.DARK)
-        chosen = Theme.LIGHT if toggled else Theme.DARK
+        chosen = theme.from_toggle(toggled)
         if chosen is not current:
             st.session_state["theme"] = chosen.value
             st.rerun()
