@@ -22,11 +22,11 @@ from pathlib import Path
 
 import pytest
 
-from src import guardrails
+from src import guardrails, store
 from src.config import LlmEnv, load_settings
 from src.generation import GenerationError
 from src.models import DraftAnswer, IndexNotBuiltError, Intent
-from src.pipeline import answer, draft
+from src.pipeline import answer, draft, warm_index
 from src.registry import load_registry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -330,3 +330,22 @@ def test_the_draft_command_reports_a_gate_refusal(capsys: pytest.CaptureFixture[
     printed = capsys.readouterr().out
     assert "gate       : FAIL" in printed
     assert "No draft is generated" in printed
+
+
+def test_warming_an_empty_store_builds_it_instead_of_raising(tmp_path: Path) -> None:
+    """A hosted deployment gets a fresh clone with no index, so warm_index must self-heal."""
+    settings = replace(
+        load_settings(), paths=replace(load_settings().paths, chroma_dir=str(tmp_path / "chroma"))
+    )
+    assert store.is_built(settings) is False
+    info = warm_index(settings)
+    assert store.is_built(settings) is True
+    assert info["count"] == 106, "the build must reproduce the committed corpus exactly"
+
+
+def test_answering_still_raises_when_the_index_is_missing(tmp_path: Path) -> None:
+    """Self-healing is for the UI only: a caller that skipped the build is still told."""
+    base = load_settings()
+    settings = replace(base, paths=replace(base.paths, chroma_dir=str(tmp_path / "chroma")))
+    with pytest.raises(IndexNotBuiltError):
+        answer("What is the expense ratio of the HDFC Large Cap fund?", PROVIDER, settings)

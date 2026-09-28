@@ -249,6 +249,50 @@ The load-bearing pins, and what breaks without them:
 | `transformers` | 4.46.3 | must stay <5 for `sentence-transformers` 5.7.0 |
 | `streamlit` | 1.64.0 | — |
 
+## Deploying
+
+The app is a single Streamlit process with no API key required, so it deploys as-is to
+**[Streamlit Community Cloud](https://share.streamlit.io)** (free, GitHub login). That host is the
+right target for this app specifically: it runs a long-lived WebSocket server, has a persistent disk
+for the index, and supports `torch`. Serverless hosts such as Vercel do not — see
+[Known limits](#known-limits).
+
+```bash
+# 1. push, then create the app at share.streamlit.io -> "Deploy" -> pick imyouday/Groww -> main
+# 2. click "Advanced settings" and set Python to 3.11
+# 3. deploy (no secrets needed - see below)
+```
+
+**Python 3.11 is a manual step, and it is not optional.** Community Cloud ignores `runtime.txt`,
+`.python-version` and `config.toml` when it picks an interpreter, and it defaults to 3.12, where the
+pinned `torch`/`tokenizers`/`transformers` trio does not resolve. You choose the version in the
+deploy dialog, and after the first deploy the only way to change it is to delete the app and
+redeploy it. Select 3.11 the first time.
+
+Two things happen on the hosted host that do not happen locally, both by design:
+
+- **The index builds itself on first boot.** `data/chroma/` is derived state and is not committed
+  (architecture.md §18.1), so a fresh clone starts with an empty collection. `warm_index()` builds it
+  from the committed `data/raw` snapshots instead of raising: about 12 s, no network, and it
+  reproduces `corpus_hash 924af25c…` exactly. Only the UI self-heals — `answer()` still raises
+  `IndexNotBuiltError` when the index is absent, so a script that skipped the build is told rather
+  than silently handed a 12-second wait.
+- **The embedding model downloads on first boot** (87 MB, cached on the persistent disk afterwards).
+  Every later session reuses the cache, so this is a one-time cost per redeploy.
+
+`.streamlit/config.toml` sets `server.headless` and turns `browser.gatherUsageStats` off, since
+NFR-7 rules out telemetry and Streamlit's own counter is a telemetry channel. It deliberately sets no
+`[theme]` block, because `src/theme.py` owns the light/dark toggle. Save that file as UTF-8 **without**
+a byte-order mark: Streamlit's TOML reader treats a BOM as part of the first key name and refuses to
+start.
+
+Run it with **no secrets at all** and it uses the extractive composer — the designed zero-key mode
+(determinism driver D4). Answers still come from the corpus with a citation, and they are *faster*
+(≈40 ms versus ≈800 ms for the LLM path), because the composer lifts the sentence out of the corpus
+rather than asking a model to write one. To use the LLM on a hosted app, add `LLM_API_KEY`,
+`LLM_BASE_URL` and `LLM_MODEL` as secrets. Be deliberate about that: a public URL means anyone can
+spend your quota.
+
 To re-freeze after an intentional change: `python -m src.pipeline build` and re-derive the lock.
 
 Both hashes are recorded in `data/build_report.json` and reprinted by `python -m src.pipeline build`.
@@ -312,6 +356,11 @@ From `PRD.md` §18, plus what the build actually taught:
     are refused rather than answered, which is correct behaviour, but it means this demo covers 5 of
     the 7 families the PRD lists.
 11. **MMR is unproven on this corpus** (see above). Its cost is measured; its benefit is not.
+12. **Not deployable to a serverless host as-is.** The app is a long-lived WebSocket process whose
+    dependencies include `torch` (~800 MB installed) and a 12 MB vector index on a writable disk, so
+    Vercel-style function hosts are a poor fit on three counts at once: function size, no persistent
+    process, and no writable filesystem. Streamlit Community Cloud is the supported target; see
+    [Deploying](#deploying). A Dockerfile is the route if a container host is ever needed.
 
 ---
 
@@ -319,7 +368,7 @@ From `PRD.md` §18, plus what the build actually taught:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| App shows "index is empty" | `data/chroma/` not built | `python -m src.pipeline build` |
+| App shows "index is empty" | `data/chroma/` not built | `python -m src.pipeline build`. The Streamlit UI does this for you on startup; the CLI does not. |
 | `IndexNotBuiltError` / unusable index | Chroma dir written by a different version | `rm -r data/chroma`, then rebuild |
 | `LLM_API_KEY is not set` | No `.env` | Expected. The demo works without it; use `--provider extractive` |
 | Answers all fall back to extractive mid-session | Endpoint HTTP 429 (token-per-minute limit) | Wait a minute, or stay on extractive for the demo |

@@ -569,9 +569,19 @@ def warm_index(settings: Settings | None = None) -> dict[str, Any]:
     (architecture.md §16.2, NFR-2). The throwaway encode matters as much as the weight load: the
     first real forward pass through a freshly loaded encoder costs about 2.5s of lazy
     initialisation, and paying it here turns the first user-visible answer into a 50ms one.
+
+    A missing index is built here rather than raised, because this is the path a hosted deployment
+    takes: the index is derived state and is deliberately not committed (architecture.md §18.1), so
+    a fresh clone reaches this function with an empty collection. The build reads the committed
+    `data/raw` snapshots and touches no network, so it reproduces the same 106 chunks and the same
+    `corpus_hash` as a local build. Only the UI self-heals this way: `answer()` still raises
+    `IndexNotBuiltError` when the index is absent, because a library or CLI caller that skipped the
+    build should be told rather than silently handed a 17-second wait.
     """
     resolved = settings or load_settings()
     load_registry(resolved)
+    if not store.is_built(resolved):
+        build(refresh=False, settings=resolved)
     store.ensure_built(resolved)
     encoder = embedding.get_encoder()
     encoder.encode(["warm up the encoder"], convert_to_numpy=True)

@@ -389,10 +389,16 @@ def reset(settings: Settings | None = None) -> None:
     get_collection(resolved)
 
 
+def is_built(settings: Settings | None = None) -> bool:
+    """Return True when the collection already holds at least one chunk."""
+    resolved = settings if settings is not None else load_settings()
+    return open_collection(resolved).count() > 0
+
+
 def ensure_built(settings: Settings | None = None) -> None:
     """Raise `IndexNotBuiltError` unless the collection holds at least one chunk."""
-    resolved = settings or load_settings()
-    if open_collection(resolved).count() == 0:
+    resolved = settings if settings is not None else load_settings()
+    if not is_built(resolved):
         raise IndexNotBuiltError(
             "no chunks are indexed; run `python -m src.pipeline build` before asking a question"
         )
