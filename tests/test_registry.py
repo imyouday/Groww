@@ -83,18 +83,19 @@ def registry():
     return load_registry()
 
 
-def test_real_registry_loads_five_schemes_and_two_education_sources(registry) -> None:
-    assert len(registry.sources) == 7
+def test_real_registry_loads_five_schemes_and_education_sources(registry) -> None:
+    # 5 scheme sources + 2 refusal-link education sources (E1, E2) + 19 education content sources (EDU01-EDU19)
+    assert len(registry.sources) == 26
     assert [scheme.scheme_id for scheme in registry.schemes] == ["S1", "S2", "S3", "S4", "S5"]
 
 
 def test_every_citation_allowed_url_is_https_and_on_the_fetch_allowlist(registry) -> None:
     allowed = set(load_settings().loading.allowed_hosts)
     for source in registry.sources:
-        assert source.url.startswith("https://"), source.url
-    for source in registry.sources:
         if source.allowed_for_citation:
+            assert source.url.startswith("https://"), source.url
             assert urlparse_host(source.url) in allowed, source.url
+    # Non-citation sources (education content, refusal links) may use other URL schemes
 
 
 def test_education_sources_are_never_citationable(registry) -> None:

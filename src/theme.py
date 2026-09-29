@@ -273,7 +273,7 @@ def variables(palette: dict[str, str]) -> str:
 
 NAV_HEIGHT_PX = 64
 SIDEBAR_WIDTH_PX = 380
-CONTENT_MAX_WIDTH_PX = 840
+CONTENT_MAX_WIDTH_PX = 720
 NARROW_BREAKPOINT_PX = 900
 
 
@@ -290,8 +290,6 @@ def shell_css() -> str:
         [
             f"body {{ padding-top: {NAV_HEIGHT_PX}px; }}",
             f"section.main > div {{ max-width: {CONTENT_MAX_WIDTH_PX}px; }}",
-            f"[data-testid='stSidebar'] {{ width: {SIDEBAR_WIDTH_PX}px; }}",
-            f"[data-testid='stSidebar'] > div {{ padding-top: {NAV_HEIGHT_PX}px; }}",
             ".mf-nav { position: sticky; top: 0; z-index: 999; margin: -1rem -1rem 0; padding: 0.75rem 1rem;",
             "  background: color-mix(in srgb, var(--mf-surface) 90%, transparent);",
             "  backdrop-filter: blur(12px); border-bottom: 1px solid var(--mf-outline-variant); }",
@@ -301,7 +299,7 @@ def shell_css() -> str:
             ".mf-brand-mark { display: grid; place-items: center; width: 28px; height: 28px;",
             "  border-radius: 8px; background: var(--mf-primary-container); color: #04231a;",
             "  font-weight: 800; }",
-            ".mf-nav-links { display: flex; gap: 0.25rem; margin-left: auto; }",
+            ".mf-nav-links { display: flex; gap: 0.25rem; margin-left: auto; align-items: center; }",
             ".mf-nav-link { padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 14px;",
             "  color: var(--mf-on-surface-variant); }",
             ".mf-nav-link.is-active { font-weight: 600; color: var(--mf-on-surface);",
@@ -386,13 +384,6 @@ def shell_css() -> str:
             "  border-radius: 8px; z-index: 1000; }",
             "[data-testid='stChatInput'] textarea { font-size: 14px; }",
             "[data-testid='stChatInput'] { border-radius: 12px; }",
-            ".stButton > button, .stButton > button:focus {",
-            "  border-radius: 9999px; border: 1px solid var(--mf-outline-variant);",
-            "  background: var(--mf-surface-container-lowest); color: var(--mf-on-surface-variant);",
-            "  font-size: 12px; font-weight: 500; padding: 0.3rem 0.4rem; }",
-            ".stButton > button:hover { border-color: var(--mf-primary);",
-            "  color: var(--mf-on-surface); background: var(--mf-surface-container-high); }",
-            "[data-testid='stExpander'] { border-radius: 12px; }",
         ]
     )
 
@@ -405,6 +396,12 @@ def stylesheet(theme: Theme | str | None = None) -> str:
     into `prefers-color-scheme` blocks and the active one is additionally applied unconditionally:
     the media query keeps the page honest if the OS flips while the app is open, and the
     unconditional block is what makes the in-app control authoritative.
+
+    Every region of the page is pinned to `--mf-background` on purpose, including the fixed strip
+    at the bottom that holds the chat box. Streamlit paints that strip with its own
+    `--secondary-background-color`, which is unrelated to the palette, and the result is a band of
+    a second colour across the foot of a page that is otherwise one colour — it reads as a broken
+    page rather than as an input area.
     """
     active = resolve_theme(theme)
     declarations = "\n".join(
@@ -415,8 +412,13 @@ def stylesheet(theme: Theme | str | None = None) -> str:
             f".stApp, [data-testid='stSidebar'] {{\n  background: var(--mf-surface);\n"
             f"  color: var(--mf-on-surface);\n}}",
             "[data-testid='stSidebar'] { border-right: 1px solid var(--mf-outline-variant); }",
-            "[data-testid='stChatMessage'] { color: var(--mf-on-surface); }",
-            "[data-testid='stChatInput'] { border-color: var(--mf-outline-variant); }",
+            "section.main, [data-testid='stMain'], [data-testid='stMainBlockContainer'] {",
+            "  background: var(--mf-background); }",
+            "[data-testid='stBottom'], [data-testid='stBottom'] > div,",
+            "[data-testid='stBottom'] form, [data-testid='stBottom'] .stChatInput {",
+            "  background: var(--mf-background); }",
+            "[data-testid='stChatInput'] { border-color: var(--mf-outline-variant);",
+            "  background: var(--mf-surface-container-lowest); }",
             "[data-testid='stExpander'] details { border-color: var(--mf-outline-variant); }",
             "[data-testid='stExpander'] summary:hover { background: var(--mf-surface-container-low); }",
             f"h1, h2, h3 {{ font-family: {FONT_STACK}; letter-spacing: -0.02em; }}",

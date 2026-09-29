@@ -153,6 +153,9 @@ class CopySettings:
     out_of_corpus_message: str
     not_in_corpus_message: str
     smalltalk_message: str
+    greeting_templates: tuple[str, ...]
+    unclear_replies: tuple[str, ...]
+    unclear_examples: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -165,25 +168,16 @@ class UiSettings:
     badge_no_advice: str
     placeholder: str
     link_label: str
-    chat_input_label: str
     sources_label: str
     index_missing_title: str
     index_missing_message: str
     nav_links: tuple[str, ...]
     nav_active_link: str
     breadcrumb: tuple[str, ...]
-    sidebar_scheme_title: str
-    sidebar_factsheet_title: str
-    sidebar_sources_title: str
-    sidebar_riskometer_title: str
-    riskometer_levels: tuple[str, ...]
     footer_disclaimer: str
     footer_links: tuple[str, ...]
     privacy_note: str
-    enter_hint: str
-    rag_memory_label: str
     chip_row_label: str
-    explore_all_label: str
     example_questions: tuple[str, ...]
     example_questions_after_refusal: tuple[str, ...]
 
@@ -332,7 +326,16 @@ def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
             help_url=str(raw["registry"]["help_url"]),
             factsheet_index_url=str(raw["registry"]["factsheet_index_url"]),
         ),
-        "copy": CopySettings(**{f.name: str(raw["copy"][f.name]) for f in fields(CopySettings)}),
+        "copy": CopySettings(
+            **{
+                f.name: (
+                    _as_str_tuple(raw["copy"][f.name], f"copy.{f.name}")
+                    if f.name in {"greeting_templates", "unclear_replies", "unclear_examples"}
+                    else str(raw["copy"][f.name])
+                )
+                for f in fields(CopySettings)
+            },
+        ),
         "ui": UiSettings(**{f.name: _ui_value(f, raw["ui"]) for f in fields(UiSettings)}),
     }
 

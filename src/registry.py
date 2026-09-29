@@ -176,11 +176,19 @@ def _parse_source(row: dict[str, str], csv_path: Path) -> SourceRecord:
             f"expected one of {allowed}"
         ) from exc
     url = (row["url"] or "").strip()
-    if urlparse_host(url) is None:
-        raise PipelineError(
-            f"{csv_path}: source {source_id} has url={url!r}, which is not an https:// URL "
-            "(constraint C1: public https sources only)"
-        )
+    # Education content sources (EDU*) must use file:// URLs for local markdown files
+    # E1/E2 are refusal redirect links that use https:// and are not ingested
+    if source_type is SourceType.EDUCATION and source_id.startswith("EDU"):
+        if not url.startswith("file://"):
+            raise PipelineError(
+                f"{csv_path}: education source {source_id} must use file:// URL"
+            )
+    elif source_type is not SourceType.EDUCATION:
+        if urlparse_host(url) is None:
+            raise PipelineError(
+                f"{csv_path}: source {source_id} has url={url!r}, which is not an https:// URL "
+                "(constraint C1: public https sources only)"
+            )
     return SourceRecord(
         source_id=source_id,
         scheme_id=(row["scheme_id"] or "").strip(),
@@ -220,6 +228,9 @@ def _build_registry(csv_path: Path, settings: Settings) -> Registry:
     sources.sort(key=lambda item: item.source_id)
     allowed_hosts = set(settings.loading.allowed_hosts)
     for source in sources:
+        # Skip host validation for local education files
+        if source.url.startswith("file://"):
+            continue
         host = urlparse_host(source.url)
         if source.allowed_for_citation and host not in allowed_hosts:
             raise PipelineError(

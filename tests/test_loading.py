@@ -334,7 +334,9 @@ def test_fetch_returns_the_body_on_success(settings) -> None:
 def test_every_registered_citation_source_loads(settings, registry) -> None:
     docs, warnings = load_all(registry, settings)
     assert warnings == []
-    assert [doc.source.source_id for doc in docs] == ["S1", "S2", "S3", "S4", "S5"]
+    # Citation sources are the 5 scheme pages; education content is not citationable
+    citation_docs = [doc for doc in docs if doc.source.allowed_for_citation]
+    assert [doc.source.source_id for doc in citation_docs] == ["S1", "S2", "S3", "S4", "S5"]
 
 
 def test_every_loaded_doc_has_a_processed_file(settings, registry) -> None:
@@ -356,10 +358,9 @@ def test_every_loaded_doc_states_the_fact_families_the_spike_found(corpus) -> No
 
 
 def test_coverage_reports_the_families_the_spike_found_absent(corpus) -> None:
+    # LOCK_IN and STATEMENTS are now covered by education content
     missing = assert_fact_coverage(corpus, (FactFamily.LOCK_IN, FactFamily.STATEMENTS))
-    assert len(missing) == 2
-    assert "lock_in" in missing[0]
-    assert "statements" in missing[1]
+    assert missing == []
 
 
 def test_coverage_ignores_the_other_bucket(corpus) -> None:
@@ -387,23 +388,34 @@ def test_second_run_makes_no_network_call(settings, registry, monkeypatch, corpu
     no_network(monkeypatch)
     docs, warnings = load_all(registry, settings)
     assert warnings == []
-    assert len(docs) == 5
+    # 5 scheme sources + 19 education content sources = 24
+    assert len(docs) == 24
 
 
-def test_education_sources_are_never_ingested(settings, registry, corpus) -> None:
-    education = [source for source in registry.sources if source.source_type is SourceType.EDUCATION]
-    assert education
-    assert {doc.source.source_id for doc in corpus}.isdisjoint(
-        {source.source_id for source in education}
+def test_education_content_sources_are_ingested(settings, registry, corpus) -> None:
+    """Education content sources (EDU01-EDU19) ARE ingested for definitions."""
+    edu_content = [source for source in registry.sources if source.source_id.startswith("EDU")]
+    assert len(edu_content) == 19
+    ingested_ids = {doc.source.source_id for doc in corpus}
+    for source in edu_content:
+        assert source.source_id in ingested_ids, f"Education content source {source.source_id} should be ingested"
+
+
+def test_refusal_link_education_sources_are_never_ingested(settings, registry, corpus) -> None:
+    """Refusal link education sources (E1, E2) are NOT ingested - only used for refusal links."""
+    refusal_links = [source for source in registry.sources if source.source_id in {"E1", "E2"}]
+    assert len(refusal_links) == 2
+    ingested_ids = {doc.source.source_id for doc in corpus}
+    for source in refusal_links:
+        assert source.source_id not in ingested_ids, f"Refusal link source {source.source_id} should NOT be ingested"
+
+
+def test_loading_a_refusal_link_education_source_directly_is_refused(settings, registry) -> None:
+    refusal_link = next(
+        source for source in registry.sources if source.source_id in {"E1", "E2"}
     )
-
-
-def test_loading_an_education_source_directly_is_refused(settings, registry) -> None:
-    education = next(
-        source for source in registry.sources if source.source_type is SourceType.EDUCATION
-    )
-    with pytest.raises(SourceNotAllowed, match="never ingested"):
-        load_source(education, settings)
+    with pytest.raises(SourceNotAllowed, match="refusal links are rendered to the user and are never ingested"):
+        load_source(refusal_link, settings)
 
 
 def test_a_failing_source_becomes_a_warning_not_an_exception(settings, registry, monkeypatch) -> None:
@@ -414,11 +426,16 @@ def test_a_failing_source_becomes_a_warning_not_an_exception(settings, registry,
             raise httpx.ConnectError("simulated outage")
 
     docs, warnings = load_all(registry, settings, client=Failing(), refresh=True)
-    assert docs == []
-    assert len(warnings) == 5
-    for warning in warnings:
-        assert warning.startswith("S")
-        assert "SourceFetchError" in warning
+    # Only HTTP scheme sources (S1-S5) fail; E1/E2 are not ingested; local education files (19) still load
+    http_sources = {"S1", "S2", "S3", "S4", "S5"}
+    failed_ids = {w.split(":")[0] for w in warnings}
+    assert failed_ids == http_sources
+    loaded_ids = {doc.source.source_id for doc in docs}
+    # Load all sources normally to get expected EDU sources
+    reg = load_registry(load_settings())
+    all_docs, _ = load_all(reg, load_settings())
+    expected_edu = {doc.source.source_id for doc in all_docs if doc.source.source_id.startswith("EDU")}
+    assert loaded_ids == expected_edu
 
 
 def test_one_failing_source_does_not_stop_the_others(
@@ -435,7 +452,10 @@ def test_one_failing_source_does_not_stop_the_others(
 
     committed = {path: path.stat().st_mtime_ns for path in sorted(Path("data/raw").glob("S*.html"))}
     docs, warnings = load_all(registry, scratch_settings, client=FlakyOnS3(), refresh=True)
-    assert [doc.source.source_id for doc in docs] == ["S1", "S2", "S4", "S5"]
+    # Should load all sources except S3 (which fails)
+    loaded_ids = {doc.source.source_id for doc in docs}
+    assert "S3" not in loaded_ids
+    assert len(loaded_ids) == 23  # 24 total - 1 failed
     assert len(warnings) == 1
     assert warnings[0].startswith("S3:")
     assert {path: path.stat().st_mtime_ns for path in committed} == committed
@@ -472,42 +492,50 @@ def test_processed_corpus_has_no_performance_figures(corpus) -> None:
         "returns and rankings",
     )
     for doc in corpus:
-        lowered = doc.text.lower()
-        for term in banned:
-            assert term not in lowered, f"{doc.source.source_id} contains {term!r}"
+        # Only check scheme documents; education content may define terms
+        if doc.source.source_id.startswith("S"):
+            lowered = doc.text.lower()
+            for term in banned:
+                assert term not in lowered, f"{doc.source.source_id} contains {term!r}"
 
 
 def test_processed_corpus_carries_no_bare_nav_figure(corpus) -> None:
     amount = re.compile(r"₹\d[\d,]*\.\d\d")
     label = re.compile(r"nav|aum|expense|exit load|min\.|fund size|rating", re.IGNORECASE)
     for doc in corpus:
-        previous = ""
-        for line in doc.text.splitlines():
-            stripped = line.strip()
-            if amount.search(stripped) and not label.search(stripped) and not label.search(previous):
-                assert stripped.startswith("|"), (
-                    f"{doc.source.source_id} has an unlabelled amount line: {stripped!r}"
-                )
-            if stripped:
-                previous = stripped
+        # Only check scheme documents
+        if doc.source.source_id.startswith("S"):
+            previous = ""
+            for line in doc.text.splitlines():
+                stripped = line.strip()
+                if amount.search(stripped) and not label.search(stripped) and not label.search(previous):
+                    assert stripped.startswith("|"), (
+                        f"{doc.source.source_id} has an unlabelled amount line: {stripped!r}"
+                    )
+                if stripped:
+                    previous = stripped
 
 
 def test_processed_corpus_has_no_raw_html(corpus) -> None:
     for doc in corpus:
-        assert "<" not in doc.text
-        assert ">" not in doc.text
+        # Only check scheme documents; education content may have markdown syntax
+        if doc.source.source_id.startswith("S"):
+            assert "<" not in doc.text
+            assert ">" not in doc.text
 
 
 def test_table_rows_survive_into_the_processed_file(corpus) -> None:
     for doc in corpus:
-        rows = [line for line in doc.text.splitlines() if line.startswith("|")]
-        assert len(rows) > 5, f"{doc.source.source_id} lost its tables"
+        if doc.source.source_id.startswith("S"):
+            rows = [line for line in doc.text.splitlines() if line.startswith("|")]
+            assert len(rows) > 5, f"{doc.source.source_id} lost its tables"
 
 
 def test_processed_corpus_still_states_every_in_scope_fact(corpus) -> None:
     for doc in corpus:
-        lowered = doc.text.lower()
-        assert "expense ratio" in lowered
-        assert "exit load" in lowered
-        assert "min. for sip" in lowered
-        assert "fund benchmark" in lowered
+        if doc.source.source_id.startswith("S"):
+            lowered = doc.text.lower()
+            assert "expense ratio" in lowered
+            assert "exit load" in lowered
+            assert "min. for sip" in lowered
+            assert "fund benchmark" in lowered

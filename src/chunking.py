@@ -58,7 +58,6 @@ BOILERPLATE_PHRASES: tuple[str, ...] = (
     "read more",
     "know more",
     "download app",
-    "log in",
     "login",
     "sign up",
     "click here",
@@ -680,7 +679,11 @@ def _finalise(doc: LoadedDoc, drafts: list[DraftChunk], counter: TokenCounter) -
     records: list[ChunkRecord] = []
     for ordinal, draft in enumerate(drafts):
         heading = draft.heading
-        header = f"[{doc.source.scheme_name}] {heading}"
+        # Education docs don't have a scheme name; use the document title
+        if doc.source.scheme_id:
+            header = f"[{doc.source.scheme_name}] {heading}"
+        else:
+            header = f"[Education] {heading}"
         digest = hashlib.sha1(
             f"{doc.source.source_id}|{heading}|{ordinal}".encode("utf-8")
         ).hexdigest()[:16]

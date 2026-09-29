@@ -15,11 +15,15 @@ dataclass rather than borrowed from the stage that happens to also need them.
 
 from __future__ import annotations
 
+import json
+import random
 import re
 from typing import Any
 
+import httpx
+
 from src import templates
-from src.config import Settings, load_settings
+from src.config import LlmEnv, Settings, load_llm_env, load_settings
 from src.models import (
     Answer,
     AssembledContext,
@@ -337,6 +341,75 @@ def build_answer(
     )
 
 
+# LLM-based greeting generation with rotating template fallbacks
+def _generate_greeting_llm(cfg: Settings, reg: Registry, scheme_count: int) -> str | None:
+    """Generate a warm greeting using the LLM. Returns None if LLM unavailable or fails."""
+    env = load_llm_env()
+    if not (env.api_key and env.base_url and env.model):
+        return None
+
+    system_prompt = (
+        "You are a warm, friendly helper on Groww, like a helpful support teammate. "
+        "Generate a brief, friendly greeting for a mutual fund FAQ assistant. "
+        "Mention you can share facts about HDFC mutual fund schemes (expense ratios, exit loads, "
+        "SIP minimums, lock-ins, benchmarks, risk ratings). "
+        "At most 2 sentences. Use at most one emoji, and only sometimes. "
+        "Never claim to be human. Sound natural and varied."
+    )
+
+    payload = {
+        "model": env.model.strip(),
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Say hello and introduce yourself briefly."},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 80,
+    }
+
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.post(
+                f"{env.base_url.strip().rstrip('/')}/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {env.api_key}", "Content-Type": "application/json"},
+            )
+        response.raise_for_status()
+        body = response.json()
+        content = body["choices"][0]["message"]["content"].strip()
+        if content:
+            return content
+    except Exception:
+        pass
+    return None
+
+
+def _get_greeting_template(cfg: Settings, scheme_count: int) -> str:
+    """Get a rotating greeting template from config or use built-in fallbacks."""
+    templates_list = getattr(cfg.copy, "greeting_templates", None)
+    if templates_list and isinstance(templates_list, (list, tuple)) and len(templates_list) > 0:
+        return random.choice(templates_list)
+    # Built-in fallbacks
+    fallbacks = [
+        "Hi there! 👋 Great to see you. I can explain mutual fund basics and share facts about {count} HDFC schemes. What would you like to know?",
+        "Hello! I'm ready to help with HDFC mutual fund facts — expense ratios, exit loads, SIP minimums, lock-ins, and more. What's on your mind?",
+        "Hey! 👋 Happy to assist. Ask me anything about the HDFC schemes I cover.",
+        "Hi! I can share verified facts about HDFC mutual fund schemes. What would you like to learn?",
+    ]
+    return random.choice(fallbacks).format(count=scheme_count)
+
+
+def _generate_greeting(cfg: Settings, reg: Registry) -> str:
+    """Generate a greeting: try LLM first, fall back to rotating templates."""
+    scheme_count = len(reg.schemes)
+    # Try LLM
+    llm_result = _generate_greeting_llm(cfg, reg, scheme_count)
+    if llm_result:
+        return llm_result
+    # Fall back to template
+    return _get_greeting_template(cfg, scheme_count)
+
+
 def route(
     intent: Intent,
     gate: GateResult | None = None,
@@ -390,7 +463,7 @@ def route(
         )
     elif intent is Intent.SMALLTALK:
         kind = "smalltalk"
-        text = _render(templates.SMALLTALK_MESSAGE, cfg, scheme_count=count)
+        text = _generate_greeting(cfg, reg)
         link = ""
     else:
         link = _scheme_page(reg, resolved_scheme, fallback=reg.help_url)

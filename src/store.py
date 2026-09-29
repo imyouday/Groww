@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -158,37 +157,21 @@ def get_collection(settings: Settings | None = None) -> chromadb.Collection:
     """Return the configured collection, creating it with a cosine space if it is absent."""
     resolved = settings or load_settings()
     return _collection_for(
-        connect(resolved),
+        _client_for(str(resolved.paths.resolve("chroma_dir"))),
         resolved.chroma.collection_name,
         resolved.chroma.space,
         resolved.chroma.description,
     )
-
-
-@lru_cache(maxsize=8)
-def _cached_collection(
-    path: str, name: str, space: str, description: str
-) -> chromadb.Collection:
-    """Return the collection for explicit configuration values, memoised on those four."""
-    return _collection_for(_client_for(path), name, space, description)
 
 
 def open_collection(settings: Settings | None = None) -> chromadb.Collection:
-    """Return the collection for the query path, reusing one client and handle across questions.
+    """Return the collection for the query path, creating a fresh handle each call.
 
-    Building a `PersistentClient` and resolving the collection costs roughly 20ms, and the query
-    path did it twice per question, so more than half of the non-encoder time of a turn went into
-    opening a database that was already open. The index is immutable while it is being served, so
-    the handle can be reused; `reset` clears the cache, so a rebuild is never answered from a handle
-    that still points at a deleted collection.
+    The collection handle can go stale if the collection is deleted and recreated (e.g. during
+    re-ingestion). Creating a fresh handle per request is cheap (~1-2ms) and guarantees we never
+    hold a dead UUID.
     """
-    resolved = settings or load_settings()
-    return _cached_collection(
-        str(resolved.paths.resolve("chroma_dir")),
-        resolved.chroma.collection_name,
-        resolved.chroma.space,
-        resolved.chroma.description,
-    )
+    return get_collection(settings)
 
 
 def metadata_for(chunk: ChunkRecord) -> dict[str, str | int]:
@@ -289,6 +272,7 @@ def query(
     n_results: int,
     scheme_id: str | None = None,
     settings: Settings | None = None,
+    doc_type_filter: str | None = None,
 ) -> list[ScoredChunk]:
     """Return up to `n_results` chunks ranked by cosine similarity, with the scheme filter applied.
 
@@ -308,10 +292,24 @@ def query(
             "the vector store is empty; run `python -m src.pipeline build` first"
         )
     query_vector = np.asarray(vector, dtype="float32")
+
+    # Build where clause - ChromaDB supports $eq, $in, $nin, $gt, $gte, $lt, $lte, $and, $or, $not
+    where_clause = None
+    if scheme_id and doc_type_filter:
+        # For education content, filter by known EDU source IDs
+        edu_ids = [f"EDU{i:02d}" for i in range(1, 21)]
+        where_clause = {"$and": [{"scheme_id": scheme_id}, {"source_id": {"$in": edu_ids}}]}
+    elif scheme_id:
+        where_clause = {"scheme_id": scheme_id}
+    elif doc_type_filter:
+        # Use $in with known EDU source IDs for education content
+        edu_ids = [f"EDU{i:02d}" for i in range(1, 21)]
+        where_clause = {"source_id": {"$in": edu_ids}}
+
     result = collection.query(
         query_embeddings=[query_vector.tolist()],
         n_results=min(n_results, total),
-        where={"scheme_id": scheme_id} if scheme_id else None,
+        where=where_clause,
         include=["documents", "metadatas", "embeddings"],
     )
     documents = (result.get("documents") or [[]])[0]
@@ -385,7 +383,6 @@ def reset(settings: Settings | None = None) -> None:
     existing = [found.name for found in client.list_collections()]
     if name in existing:
         client.delete_collection(name)
-    _cached_collection.cache_clear()
     get_collection(resolved)
 
 

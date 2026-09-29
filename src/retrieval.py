@@ -359,6 +359,102 @@ def retrieve_with_debug(
     return context, trace
 
 
+def retrieve_education(
+    query_text: str, settings: Settings | None = None
+) -> AssembledContext | GateResult:
+    """Retrieve context from education content only (doc_type=education)."""
+    context, _gate, _trace = _run_education(query_text, settings or load_settings())
+    return context if context is not None else _gate
+
+
+def retrieve_education_with_debug(
+    query_text: str, settings: Settings | None = None
+) -> tuple[AssembledContext | None, dict]:
+    """Return the assembled education context (or None) with the full trace."""
+    context, _gate, trace = _run_education(query_text, settings or load_settings())
+    return context, trace
+
+
+def _run_education(
+    query_text: str, cfg: Settings
+) -> tuple[AssembledContext | None, GateResult, dict]:
+    """Execute retrieval restricted to education content (doc_type=education)."""
+    started = time.perf_counter()
+    intent_result = classify(query_text, cfg)
+    trace: dict = {
+        "query": query_text,
+        "intent": intent_result.intent.value,
+        "matched_rule": intent_result.matched_rule,
+        "scheme_id": intent_result.scheme_id,
+        "scheme_name": scheme_name(intent_result.scheme_id),
+        "fact_family": intent_result.fact_family.value,
+        "needs_evidence": intent_result.needs_evidence,
+        "tau": cfg.retrieval.gate_threshold,
+        "embedded_query": "",
+        "embed_ms": 0.0,
+        "dense_ms": 0.0,
+        "candidates": [],
+        "mmr_picks": [],
+        "context": "",
+        "context_tokens": 0,
+    }
+    # For education queries, we don't filter by scheme
+    embedded = contextualise_query(query_text, None, intent_result.fact_family)
+    trace["embedded_query"] = embedded
+    clock = time.perf_counter()
+    vector = embed_query(embedded, cfg)
+    trace["embed_ms"] = round((time.perf_counter() - clock) * 1000, 2)
+
+    clock = time.perf_counter()
+    candidates = query(
+        vector,
+        cfg.retrieval.dense_k,
+        scheme_id=None,  # No scheme filter for education
+        settings=cfg,
+        doc_type_filter="education",  # Only education content
+    )
+    trace["dense_ms"] = round((time.perf_counter() - clock) * 1000, 2)
+
+    boosted = boost(candidates, query_text, intent_result.fact_family, None, cfg)
+    trace["candidates"] = [
+        {
+            "chunk_id": item.chunk.chunk_id,
+            "scheme": item.chunk.scheme_id,
+            "section": item.chunk.section,
+            "section_type": item.chunk.section_type.value,
+            "tokens": item.chunk.token_count,
+            "dense": round(item.dense, 4),
+            "boost": round(item.keyword_boost, 4),
+            "final": round(item.final, 4),
+            "terms": item.matched_terms,
+        }
+        for item in boosted
+    ]
+
+    vectors = vectors_for([item.chunk.chunk_id for item in boosted], cfg)
+    selected = mmr(boosted, cfg.retrieval.top_n, cfg.retrieval.mmr_lambda, vectors)
+    trace["mmr_picks"] = [item.chunk.chunk_id for item in selected]
+
+    gate = grounding_gate(selected, intent_result.fact_family, intent_result.needs_evidence, cfg)
+    trace["gate"] = _gate_trace(gate)
+    included = _within_budget(selected, cfg)
+    trace["context"] = assemble(included, cfg)
+    trace["context_tokens"] = sum(item.chunk.token_count for item in included)
+    trace["total_ms"] = round((time.perf_counter() - started) * 1000, 2)
+    if not gate.passed:
+        return None, gate, trace
+    context = AssembledContext(
+        query=query_text,
+        scheme_id=None,
+        fact_family=intent_result.fact_family,
+        chunks=included,
+        total_tokens=trace["context_tokens"],
+        top_score=selected[0].final if selected else 0.0,
+        context_text=assemble(included, cfg),
+    )
+    return context, gate, trace
+
+
 def _format_trace(trace: dict) -> str:
     lines = [
         f"query            {trace['query']}",

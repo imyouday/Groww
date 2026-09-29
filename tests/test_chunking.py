@@ -492,8 +492,10 @@ def test_every_fact_family_is_retrievable_for_every_scheme(settings, counter) ->
         "holdings",
     )
     docs, _ = load_all(load_registry(settings), settings)
-    assert len(docs) >= 5
-    for doc in docs:
+    # Only check scheme documents (S1-S5); education content is general
+    scheme_docs = [doc for doc in docs if doc.source.source_id.startswith("S")]
+    assert len(scheme_docs) == 5
+    for doc in scheme_docs:
         blob = " ".join(
             chunk.embed_text.lower() for chunk in chunk_document(doc, settings, counter)
         )

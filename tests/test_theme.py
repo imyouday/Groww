@@ -142,10 +142,10 @@ def test_type_scale_radii_and_spacing_are_shared_by_both_themes() -> None:
 
 
 def test_the_shell_uses_the_wireframe_geometry() -> None:
-    """The two-column wireframe becomes one column plus a 380px sidebar, and the values are named."""
+    """The single centered column wireframe with max-width ~720px."""
     css = theme.shell_css()
-    assert f"[data-testid='stSidebar'] {{ width: {theme.SIDEBAR_WIDTH_PX}px; }}" in css
-    assert f"section.main > div {{ max-width: {theme.CONTENT_MAX_WIDTH_PX}px; }}" in css
+    # Check for centered column max-width (720px)
+    assert "max-width: 720px" in css
     assert "position: sticky" in css
     assert "backdrop-filter" in css
 

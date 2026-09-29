@@ -38,6 +38,13 @@ class FactFamily(str, Enum):
     RISKOMETER = "riskometer"
     BENCHMARK = "benchmark"
     STATEMENTS = "statements"
+    AUM = "aum"
+    DIRECT_VS_REGULAR = "direct_vs_regular"
+    GROWTH_VS_IDCW = "growth_vs_idcw"
+    KYC = "kyc"
+    NOMINEE = "nominee"
+    CUTOFF_TIME = "cutoff_time"
+    NAV = "nav"
     OTHER = "other"
 
 

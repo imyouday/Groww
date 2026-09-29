@@ -21,7 +21,7 @@ INFRASTRUCTURE = {"config", "models", "templates", "prompts", "theme"}
 # predecessor per module is stricter than a blanket "any corpus module" rule, which would let
 # chunking import store and hide a real inversion.
 CORPUS = {"registry", "pii", "loading", "chunking", "embedding", "store"}
-POLICY = {"intents", "retrieval", "generation", "guardrails"}
+POLICY = {"intents", "retrieval", "generation", "guardrails", "intent_router"}
 
 ALLOWED: dict[str, set[str]] = {
     **{name: {"models"} for name in INFRASTRUCTURE if name not in {"models", "templates"}},
@@ -33,11 +33,12 @@ ALLOWED: dict[str, set[str]] = {
     "chunking": INFRASTRUCTURE | {"registry", "pii", "loading"},
     "embedding": INFRASTRUCTURE | {"registry", "pii", "loading", "chunking"},
     "store": INFRASTRUCTURE | {"registry", "pii", "loading", "chunking", "embedding"},
-    **{name: INFRASTRUCTURE | CORPUS for name in POLICY - {"retrieval"}},
+    **{name: INFRASTRUCTURE | CORPUS for name in POLICY - {"retrieval", "intent_router"}},
     # 5.1 intent resolution is a sub-stage of retrieval, not a peer of it, so retrieval is the one
     # policy module allowed to read intents. Every other policy-to-policy edge stays forbidden:
     # generation must not import retrieval, and guardrails must not import either.
     "retrieval": INFRASTRUCTURE | CORPUS | {"intents"},
+    "intent_router": INFRASTRUCTURE | {"intents", "registry", "pii"},
     "pipeline": INFRASTRUCTURE | CORPUS | POLICY,
     # theme is design-token data and CSS generation: no retrieval, no prompting, no model.
     "app": {"pipeline", "config", "models", "templates", "theme"},

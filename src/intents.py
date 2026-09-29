@@ -58,11 +58,18 @@ FALLBACK_RULE = "r7_needs_evidence"
 FACT_TERMS: dict[FactFamily, tuple[str, ...]] = {
     FactFamily.EXPENSE_RATIO: ("expense ratio", "expense ratio and other fees", "ter", "charges"),
     FactFamily.EXIT_LOAD: ("exit load", "exit charges", "load"),
-    FactFamily.MIN_SIP: ("minimum sip", "min sip", "minimum investment", "minimum amount"),
-    FactFamily.LOCK_IN: ("lock-in", "lock in", "3 years", "three years", "80c", "tax saver"),
-    FactFamily.RISKOMETER: ("riskometer", "risk"),
+    FactFamily.MIN_SIP: ("minimum sip", "min sip", "minimum investment", "minimum amount", "sip", "systematic investment plan", "lump sum", "lumpsum"),
+    FactFamily.LOCK_IN: ("lock-in", "lock in", "3 years", "three years", "80c", "tax saver", "elss", "lockin period"),
+    FactFamily.RISKOMETER: ("riskometer", "risk", "risk rating"),
     FactFamily.BENCHMARK: ("benchmark", "index"),
-    FactFamily.STATEMENTS: ("capital gains", "statement", "tax report", "download"),
+    FactFamily.STATEMENTS: ("capital gains", "statement", "tax report", "download", "capital gains statement"),
+    FactFamily.AUM: ("aum", "assets under management", "asset under management"),
+    FactFamily.DIRECT_VS_REGULAR: ("direct", "regular", "direct plan", "regular plan", "direct vs regular"),
+    FactFamily.GROWTH_VS_IDCW: ("growth", "idcw", "dividend", "growth vs idcw", "growth option", "idcw option"),
+    FactFamily.KYC: ("kyc", "know your customer"),
+    FactFamily.NOMINEE: ("nominee", "nomination"),
+    FactFamily.CUTOFF_TIME: ("cut-off", "cutoff", "cut off time", "cut-off time", "cutoff time"),
+    FactFamily.NAV: ("nav", "net asset value", "net asset value per unit"),
 }
 
 FAMILY_LABELS: dict[FactFamily, str] = {
@@ -73,6 +80,13 @@ FAMILY_LABELS: dict[FactFamily, str] = {
     FactFamily.RISKOMETER: "riskometer and benchmark",
     FactFamily.BENCHMARK: "riskometer and benchmark",
     FactFamily.STATEMENTS: "tax statements and reports",
+    FactFamily.AUM: "assets under management",
+    FactFamily.DIRECT_VS_REGULAR: "direct vs regular plan",
+    FactFamily.GROWTH_VS_IDCW: "growth vs IDCW option",
+    FactFamily.KYC: "KYC",
+    FactFamily.NOMINEE: "nominee",
+    FactFamily.CUTOFF_TIME: "cut-off time",
+    FactFamily.NAV: "NAV",
     FactFamily.OTHER: "scheme facts",
 }
 
@@ -84,6 +98,13 @@ EXPECTED_SECTION: dict[FactFamily, SectionType] = {
     FactFamily.RISKOMETER: SectionType.RISK,
     FactFamily.BENCHMARK: SectionType.RISK,
     FactFamily.STATEMENTS: SectionType.TAX,
+    FactFamily.AUM: SectionType.GENERAL,
+    FactFamily.DIRECT_VS_REGULAR: SectionType.GENERAL,
+    FactFamily.GROWTH_VS_IDCW: SectionType.GENERAL,
+    FactFamily.KYC: SectionType.GENERAL,
+    FactFamily.NOMINEE: SectionType.GENERAL,
+    FactFamily.CUTOFF_TIME: SectionType.GENERAL,
+    FactFamily.NAV: SectionType.GENERAL,
     FactFamily.OTHER: SectionType.GENERAL,
 }
 

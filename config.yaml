@@ -55,15 +55,22 @@ retrieval:
   fact_terms:                         # FactFamily -> surface forms used for term-coverage checks
     expense_ratio: ["expense ratio", "ter", "expense ratio and other fees", "charges"]
     exit_load: ["exit load", "exit charges", "load"]
-    min_sip: ["minimum sip", "min sip", "min. for sip", "min. for", "minimum investment", "minimum amount"]
+    min_sip: ["minimum sip", "min sip", "min. for sip", "min. for", "minimum investment", "minimum amount", "sip", "systematic investment plan", "lump sum", "lumpsum"]
     # "tax saver" was here in Phase 6 and is deliberately gone: it is a scheme alias, present in the
     # scheme name of every S3 chunk, so it satisfied term coverage for a lock-in question whose answer
     # is not in the corpus. The gate must fail "is there a lock-in?" honestly rather than answer with
     # a sentence that never mentions a lock-in. docs/corpus_matrix.md records the gap.
-    lock_in: ["lock-in", "lock in", "3 years", "80c"]
-    riskometer: ["riskometer", "risk"]
+    lock_in: ["lock-in", "lock in", "3 years", "80c", "elss", "lockin period"]
+    riskometer: ["riskometer", "risk", "risk rating"]
     benchmark: ["benchmark", "index"]
-    statements: ["capital gains", "statement", "tax report", "download"]
+    statements: ["capital gains", "statement", "tax report", "download", "capital gains statement"]
+    aum: ["aum", "assets under management", "asset under management"]
+    direct_vs_regular: ["direct", "regular", "direct plan", "regular plan", "direct vs regular"]
+    growth_vs_idcw: ["growth", "idcw", "dividend", "growth vs idcw", "growth option", "idcw option"]
+    kyc: ["kyc", "know your customer"]
+    nominee: ["nominee", "nomination"]
+    cutoff_time: ["cut-off", "cutoff", "cut off time", "cut-off time", "cutoff time"]
+    nav: ["nav", "net asset value", "net asset value per unit"]
 
 generation:
   provider: auto                      # auto | llm | extractive   (ablation A4)
@@ -82,7 +89,7 @@ loading:
   # Phase 0 spike: hdfcmutualfund.com is not HDFC's domain and is removed. hdfcfund.com is the
   # real AMC domain but returns HTTP 403 to a scripted client, so it is not fetchable and is
   # therefore absent here (docs/corpus_matrix.md §3).
-  allowed_hosts: [groww.in, amfiindia.com, sebi.gov.in]
+  allowed_hosts: [groww.in, amfiindia.com, www.amfiindia.com, sebi.gov.in, localhost]
   # Blocks that carry performance figures are dropped at ingest rather than merely refused at
   # query time. PRD constraint C3 says the system never returns, computes, or compares
   # returns/NAV/performance; a retrievable return table would be a chunk the retriever can
@@ -126,7 +133,6 @@ ui:
   badge_no_advice: "No Advice · Informational Only"
   placeholder: "Ask a factual question (e.g. minimum SIP, benchmark, TER)…"
   link_label: "View Filing"
-  chat_input_label: "Chat"
   sources_label: "Sources used"
   index_missing_title: "No index found"
   index_missing_message: "This app needs the offline index before it can answer anything. From the project root, run:"
@@ -134,18 +140,10 @@ ui:
   nav_links: ["Explore", "Investments", "Mutual Funds", "AI FAQ Assistant"]
   nav_active_link: "AI FAQ Assistant"
   breadcrumb: ["Home", "Mutual Funds", "AI FAQ & Statutory Document Assistant"]
-  sidebar_scheme_title: "Active Grounding Context"
-  sidebar_factsheet_title: "Statutory Factsheet"
-  sidebar_sources_title: "Indexed Sources"
-  sidebar_riskometer_title: "Scheme Riskometer"
-  riskometer_levels: ["Low", "Moderate", "High", "Very High"]
   footer_disclaimer: "Mutual fund investments are subject to market risks. Read all scheme related documents carefully."
   footer_links: ["Statutory Disclosures", "Terms of Use", "Privacy Policy", "SEBI Circulars"]
   privacy_note: "Privacy Safeguard: Do not provide PAN, Folio IDs, or bank credentials."
-  enter_hint: "Press Enter to send"
-  rag_memory_label: "RAG Memory: Isolated"
   chip_row_label: "Popular Factual Queries"
-  explore_all_label: "Explore all FAQs"
   example_questions:
     - "What is the expense ratio of the HDFC Large Cap fund?"
     - "What is the exit load on the HDFC Small Cap fund?"
@@ -210,3 +208,20 @@ copy:
     I'm a facts-only assistant for {scheme_count} HDFC AMC mutual fund schemes. I can tell you the
     expense ratio, exit load, minimum SIP, ELSS lock-in, riskometer, benchmark, and how to download
     statements — each answer with one official source link. I never give investment advice.
+
+  # Rotating greeting templates for LLM fallback (used when LLM is unavailable)
+  greeting_templates:
+    - "Hi there! 👋 Great to see you. I can explain mutual fund basics and share facts about {scheme_count} HDFC schemes. What would you like to know?"
+    - "Hello! I'm ready to help with HDFC mutual fund facts — expense ratios, exit loads, SIP minimums, lock-ins, and more. What's on your mind?"
+    - "Hey! 👋 Happy to assist. Ask me anything about the HDFC schemes I cover."
+    - "Hi! I can share verified facts about HDFC mutual fund schemes. What would you like to learn?"
+
+  # Unclear question handling
+  unclear_replies:
+    - "I want to make sure I give you the right answer. Could you clarify what you'd like to know? For example: \"What is the exit load for HDFC Small Cap?\" or \"What is NAV?\""
+    - "Could you rephrase that? I can help with things like expense ratios, exit loads, minimum SIP amounts, lock-in periods, benchmarks, and risk ratings for HDFC funds."
+    - "I'm not sure I caught that. Try asking about a specific fund fact (e.g., \"exit load of HDFC Flexi Cap\") or a general concept (e.g., \"what is NAV?\")."
+
+  unclear_examples:
+    - "What is the expense ratio of HDFC Large Cap?"
+    - "What is NAV?"

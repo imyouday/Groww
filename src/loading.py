@@ -112,6 +112,8 @@ _NON_BREAKING = {
 
 def assert_url_allowed(url: str, settings: Settings) -> str:
     """Return the host of url, or raise SourceNotAllowed when it is not on the allowlist."""
+    if url.startswith("file://"):
+        return "local"
     if not url.startswith("https://"):
         raise SourceNotAllowed(f"refusing non-https source URL: {url!r}")
     host = (urlsplit(url).hostname or "").lower()
@@ -125,6 +127,15 @@ def assert_url_allowed(url: str, settings: Settings) -> str:
 
 def fetch(url: str, settings: Settings, client: httpx.Client | None = None) -> str:
     """Return the raw HTML of url, retrying with backoff. Raises SourceFetchError on failure."""
+    # Handle local file:// URLs for education content
+    if url.startswith("file://"):
+        path = url.replace("file://", "")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as exc:
+            raise SourceFetchError(f"could not read local file {path}: {exc}")
+
     assert_url_allowed(url, settings)
     session = client or _new_client(settings)
     owned = client is None
@@ -150,9 +161,24 @@ def fetch(url: str, settings: Settings, client: httpx.Client | None = None) -> s
     )
 
 
+def _strip_yaml_front_matter(text: str) -> str:
+    """Remove YAML front matter from markdown text (content between --- delimiters)."""
+    if text.startswith("---"):
+        # Find the closing delimiter (--- or -)
+        end = text.find("\n---", 3)
+        if end != -1:
+            return text[end + 4:].lstrip()
+        # Some files use - as closing delimiter
+        end = text.find("\n-", 3)
+        if end != -1:
+            return text[end + 2:].lstrip()
+    return text
+
+
 def normalise(text: str) -> str:
     """Return text with non-breaking spaces, runs of spaces, and blank-line runs collapsed."""
     cleaned = soup_free_text(text)
+    cleaned = _strip_yaml_front_matter(cleaned)
     cleaned = _INLINE_SPACE.sub(" ", cleaned)
     cleaned = _TRAILING_SPACE.sub("\n", cleaned)
     cleaned = "\n".join(line.strip() for line in cleaned.split("\n"))
@@ -240,6 +266,8 @@ def raw_snapshot_path(settings: Settings, source: SourceRecord) -> Path:
         markdown = settings.paths.resolve("raw_dir") / f"{source.source_id}.md"
         if markdown.is_file():
             return markdown
+    if source.source_type is SourceType.EDUCATION:
+        return settings.paths.resolve("raw_dir") / f"{source.source_id}.md"
     return settings.paths.resolve("raw_dir") / f"{source.source_id}.html"
 
 
@@ -274,10 +302,12 @@ def load_source(
     corpus that the evaluation numbers were measured against.
     """
     if source.source_type is SourceType.EDUCATION:
-        raise SourceNotAllowed(
-            f"source {source.source_id} is an education link: refusal links are rendered to the "
-            "user and are never ingested (architecture.md §13.4)"
-        )
+        # Only education content sources (EDU*) are ingested; refusal links (E1, E2) are not
+        if not source.source_id.startswith("EDU"):
+            raise SourceNotAllowed(
+                f"source {source.source_id} is an education link: refusal links are rendered to the "
+                "user and are never ingested (architecture.md §13.4)"
+            )
     snapshot = raw_snapshot_path(settings, source)
     text_path = settings.paths.resolve("processed_dir") / f"{source.source_id}.txt"
 
@@ -316,8 +346,10 @@ def load_all(
     """
     docs: list[LoadedDoc] = []
     warnings: list[str] = []
+    # Include both scheme pages and education content
     ingestible = [
-        source for source in registry.sources if source.source_type is not SourceType.EDUCATION
+        source for source in registry.sources
+        if source.source_type is not SourceType.EDUCATION or source.source_id.startswith("EDU")
     ]
     session = client
     created: list[httpx.Client] = []

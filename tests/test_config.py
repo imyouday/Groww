@@ -192,7 +192,6 @@ def test_every_ui_list_field_loads_as_a_tuple_of_strings(settings: Settings) -> 
     assert {field.name for field in list_fields} == {
         "nav_links",
         "breadcrumb",
-        "riskometer_levels",
         "footer_links",
         "example_questions",
         "example_questions_after_refusal",

@@ -31,6 +31,7 @@ import numpy as np
 from src import chunking, embedding, guardrails, loading, store, templates
 from src.config import Settings, config_hash, configure_console, load_llm_env, load_settings
 from src.generation import ExtractiveGenerator, resolve_generator
+from src.intent_router import RouterIntent, route_intent
 from src.intents import classify, has_pii
 from src.models import (
     Answer,
@@ -44,11 +45,36 @@ from src.models import (
     PipelineError,
 )
 from src.registry import load_registry
-from src.retrieval import NON_FACTUAL, retrieve, retrieve_with_debug
+from src.retrieval import NON_FACTUAL, retrieve, retrieve_with_debug, retrieve_education, retrieve_education_with_debug
 
 VECTOR_DUMP_WIDTH = 100
 VECTOR_DUMP_TEXT_WIDTH = 86
 LOGGER = logging.getLogger("mf_faq")
+
+# Chroma retry helper: on InvalidCollectionException/ValueError (stale collection handle),
+# recreate the client and retry once. This handles the case where the collection was
+# deleted and recreated (e.g. during re-ingestion) while the app is running.
+def _with_chroma_retry(func, *args, **kwargs):
+    """Execute a Chroma operation with one retry on stale collection handle."""
+    try:
+        return func(*args, **kwargs)
+    except Exception as exc:
+        # Check for chromadb stale collection errors
+        exc_type = type(exc).__name__
+        exc_module = type(exc).__module__
+        if "InvalidCollectionException" in exc_type or "Collection" in str(exc):
+            LOGGER.warning("Chroma collection handle stale, recreating client and retrying: %s", exc)
+            # Clear any cached state by forcing a fresh client
+            if args and hasattr(args[0], 'chroma'):
+                settings = args[0]
+            elif kwargs.get('settings'):
+                settings = kwargs['settings']
+            else:
+                settings = load_settings()
+            # Force fresh collection handle
+            store.get_collection(settings)
+            return func(*args, **kwargs)
+        raise
 
 # The only fields that may ever reach a log record (architecture.md §14.3). An allowlist rather
 # than a denylist, because a denylist is only as good as the next field someone adds.
@@ -398,6 +424,7 @@ def answer(
     query: str,
     provider: str | None = None,
     settings: Settings | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> Answer:
     """Answer one question end to end, log the outcome, and return a validated, cited Answer.
 
@@ -405,7 +432,7 @@ def answer(
     before retrieval, and so that the logged fields are drawn from the finished trace rather than
     from whatever each branch happened to have in hand.
     """
-    result = _answer(query, provider, settings)
+    result = _answer(query, provider, settings, history)
     log_answer(result)
     return result
 
@@ -414,6 +441,7 @@ def _answer(
     query: str,
     provider: str | None = None,
     settings: Settings | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> Answer:
     """Run the online path for one question (architecture.md §15.2).
 
@@ -431,7 +459,12 @@ def _answer(
     started = time.perf_counter()
     classification = classify(query, resolved)
     pii_hits = has_pii(query)
-    if pii_hits or classification.intent is Intent.PII_REQUEST:
+
+    # Run intent router with conversation history
+    router_result = route_intent(query, history or [], resolved)
+
+    # PII takes priority
+    if pii_hits or classification.intent is Intent.PII_REQUEST or router_result.intent is RouterIntent.PII:
         refusal = guardrails.route(Intent.PII_REQUEST, None, None, registry, resolved)
         return replace(
             refusal,
@@ -442,36 +475,181 @@ def _answer(
                 "timings_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 2)},
             },
         )
-    if classification.intent in NON_FACTUAL:
+
+    # Handle router intents
+    if router_result.intent is RouterIntent.GREETING_SMALLTALK:
         return guardrails.route(
-            classification.intent,
-            None,
-            None,
-            registry,
-            resolved,
-            classification.scheme_id,
+            Intent.SMALLTALK, None, None, registry, resolved, router_result.scheme_id
         )
 
-    context, retrieval_trace = retrieve_with_debug(query, resolved)
-    timings: dict[str, Any] = {
-        "retrieval_ms": round((time.perf_counter() - started) * 1000, 2)
-    }
-    if context is None:
-        gate = GateResult(
-            False,
-            float(retrieval_trace["gate"]["top_score"]),
-            float(retrieval_trace["gate"]["threshold"]),
-            str(retrieval_trace["gate"]["reason"]),
-            list(retrieval_trace["gate"]["covered_terms"]),
-        )
-        routed = guardrails.route(
-            Intent.FACTUAL_FACT, gate, None, registry, resolved, classification.scheme_id
-        )
-        return replace(
-            routed,
-            trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+    if router_result.intent is RouterIntent.ADVICE:
+        return guardrails.route(
+            Intent.ADVICE_REQUEST, None, None, registry, resolved, router_result.scheme_id
         )
 
+    if router_result.intent is RouterIntent.OUT_OF_SCOPE:
+        return guardrails.route(
+            Intent.OUT_OF_CORPUS, None, None, registry, resolved, router_result.scheme_id
+        )
+
+    if router_result.intent is RouterIntent.PERFORMANCE:
+        return guardrails.route(
+            Intent.PERFORMANCE_REQUEST, None, None, registry, resolved, router_result.scheme_id
+        )
+
+    if router_result.intent is RouterIntent.UNCLEAR:
+        # Unclear questions get a clarifying response without retrieval
+        import random
+        cfg = load_settings()
+        unclear_replies = getattr(cfg.copy, "unclear_replies", None)
+        if unclear_replies and isinstance(unclear_replies, (list, tuple)) and len(unclear_replies) > 0:
+            reply = random.choice(unclear_replies)
+        else:
+            reply = "Could you clarify what you'd like to know? For example: \"What is the exit load for HDFC Small Cap?\" or \"What is NAV?\""
+        unclear_examples = getattr(cfg.copy, "unclear_examples", None)
+        followups = list(unclear_examples) if unclear_examples and isinstance(unclear_examples, (list, tuple)) else [
+            "What is the expense ratio of HDFC Large Cap?",
+            "What is NAV?",
+        ]
+        return Answer(
+            text=reply,
+            kind="clarification",
+            citation_url=None,
+            citation_source_id=None,
+            last_updated=None,
+            generator="none",
+            retrieved=[],
+            trace={
+                "stage": "guardrails",
+                "kind": "clarification",
+                "intent": "unclear",
+                "generator": "none",
+                "guardrail": "routed",
+                "routed": True,
+                "scheme_id": None,
+                "gate_reason": "unclear question",
+                "link_type": "none",
+                "citation_source_id": None,
+                "timings_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 2)},
+            },
+        )
+
+    if router_result.intent is RouterIntent.SCHEME_OVERVIEW:
+        # Scheme overview questions - list all 5 schemes with a friendly message
+        reg = registry
+        scheme_names = [s.scheme_name for s in reg.schemes]
+        reply = (
+            f"I cover {len(scheme_names)} HDFC AMC mutual fund schemes: "
+            f"{', '.join(scheme_names)}. "
+            f"Ask me about any specific one — expense ratio, exit load, minimum SIP, lock-in, "
+            f"risk rating, benchmark, or how to download statements."
+        )
+        return Answer(
+            text=reply,
+            kind="scheme_overview",
+            citation_url=None,
+            citation_source_id=None,
+            last_updated=None,
+            generator="none",
+            retrieved=[],
+            trace={
+                "stage": "guardrails",
+                "kind": "scheme_overview",
+                "intent": "scheme_overview",
+                "generator": "none",
+                "guardrail": "routed",
+                "routed": True,
+                "scheme_id": None,
+                "gate_reason": "scheme overview question",
+                "link_type": "none",
+                "citation_source_id": None,
+                "timings_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 2)},
+            },
+        )
+
+    if router_result.intent is RouterIntent.DEFINITION:
+        # Retrieve from education content only
+        context, retrieval_trace = retrieve_education_with_debug(query, resolved)
+        timings: dict[str, Any] = {
+            "retrieval_ms": round((time.perf_counter() - started) * 1000, 2)
+        }
+        if context is None:
+            gate = GateResult(
+                False,
+                float(retrieval_trace["gate"]["top_score"]),
+                float(retrieval_trace["gate"]["threshold"]),
+                str(retrieval_trace["gate"]["reason"]),
+                list(retrieval_trace["gate"]["covered_terms"]),
+            )
+            routed = guardrails.route(
+                Intent.FACTUAL_FACT, gate, None, registry, resolved, None
+            )
+            return replace(
+                routed,
+                trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+            )
+        # Education retrieval succeeded - use this context and proceed to generation
+        from src.intents import IntentResult
+        classification = IntentResult(
+            intent=Intent.FACTUAL_FACT,
+            scheme_id=classification.scheme_id,
+            fact_family=classification.fact_family,
+            needs_evidence=classification.needs_evidence,
+            matched_rule=classification.matched_rule,
+        )
+    elif router_result.intent is RouterIntent.SCHEME_FACT:
+        # Use normal retrieval with scheme filter for scheme-specific facts
+        context, retrieval_trace = retrieve_with_debug(query, resolved)
+        timings: dict[str, Any] = {
+            "retrieval_ms": round((time.perf_counter() - started) * 1000, 2)
+        }
+        if context is None:
+            gate = GateResult(
+                False,
+                float(retrieval_trace["gate"]["top_score"]),
+                float(retrieval_trace["gate"]["threshold"]),
+                str(retrieval_trace["gate"]["reason"]),
+                list(retrieval_trace["gate"]["covered_terms"]),
+            )
+            routed = guardrails.route(
+                Intent.FACTUAL_FACT, gate, None, registry, resolved, classification.scheme_id
+            )
+            return replace(
+                routed,
+                trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+            )
+    else:
+        # Fallback to original classification
+        if classification.intent in NON_FACTUAL:
+            return guardrails.route(
+                classification.intent,
+                None,
+                None,
+                registry,
+                resolved,
+                classification.scheme_id,
+            )
+        context, retrieval_trace = retrieve_with_debug(query, resolved)
+        timings: dict[str, Any] = {
+            "retrieval_ms": round((time.perf_counter() - started) * 1000, 2)
+        }
+        if context is None:
+            gate = GateResult(
+                False,
+                float(retrieval_trace["gate"]["top_score"]),
+                float(retrieval_trace["gate"]["threshold"]),
+                str(retrieval_trace["gate"]["reason"]),
+                list(retrieval_trace["gate"]["covered_terms"]),
+            )
+            routed = guardrails.route(
+                Intent.FACTUAL_FACT, gate, None, registry, resolved, classification.scheme_id
+            )
+            return replace(
+                routed,
+                trace={**retrieval_trace, **routed.trace, "timings_ms": timings},
+            )
+
+    # Proceed to generation with the retrieved context
     generator, _provider_name = resolve_generator(resolved)
     clock = time.perf_counter()
     draft: DraftAnswer | None = None
@@ -589,6 +767,9 @@ def warm_index(settings: Settings | None = None) -> dict[str, Any]:
     `corpus_hash` as a local build. Only the UI self-heals this way: `answer()` still raises
     `IndexNotBuiltError` when the index is absent, because a library or CLI caller that skipped the
     build should be told rather than silently handed a 17-second wait.
+
+    If the collection handle goes stale (e.g. collection was recreated during re-ingestion),
+    this function retries once with a fresh handle.
     """
     resolved = settings or load_settings()
     load_registry(resolved)
@@ -597,7 +778,7 @@ def warm_index(settings: Settings | None = None) -> dict[str, Any]:
     store.ensure_built(resolved)
     encoder = embedding.get_encoder()
     encoder.encode(["warm up the encoder"], convert_to_numpy=True)
-    return index_status(resolved)
+    return _with_chroma_retry(index_status, resolved)
 
 
 def ask(query: str, provider: str | None = None, debug: bool = False) -> int:

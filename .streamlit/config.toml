@@ -1,30 +1,18 @@
-# Streamlit runtime configuration.
-#
-# Python version is deliberately NOT pinned here. Streamlit Community Cloud ignores runtime.txt,
-# .python-version and config.toml for interpreter selection; the version is chosen in the deploy
-# dialog's "Advanced settings" and cannot be changed without deleting and redeploying the app.
-# Use 3.11 there, because the pinned torch/tokenizers/transformers trio only resolves on 3.11.
-#
-# Usage stats are off: architecture.md NFR-7 requires no telemetry, and Streamlit's own counter is
-# a telemetry channel like any other. The app theme is deliberately NOT set here, because
-# src/theme.py owns the light/dark toggle and a [theme] block would fight it.
-#
-# server.headless is required on a hosted host: there is no browser to open.
-#
-# The file watcher is OFF, and that is load-bearing rather than a preference. With a watcher running,
-# Streamlit re-crawls the project tree to recompute its watched-module set on every script event, and
-# in a project whose virtualenv sits inside the repo that is ~48,800 files. Meanwhile st.cache_resource
-# builds its cache key with inspect.getsourcelines(), so the two fight over the same files and the
-# server pins a CPU at 100% while accepting connections it never answers. Streamlit's own watcher
-# blacklist covers "**/venv" but not "**/.venv", so pointing the interpreter somewhere else would hide
-# the problem instead of fixing it. Hot reload is a local-dev convenience; correctness and a responsive
-# app are not, so the watcher goes. Restart the app after editing any source file.
-#
-# NOTE: save as UTF-8 *without* a byte-order mark. Streamlit parses TOML with a minimal reader
-# that treats the BOM as part of the first key name.
-[browser]
-gatherUsageStats = false
+[theme]
+base = "light"
+primaryColor = "#00D09C"
+backgroundColor = "#F4F6F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1E293B"
+font = "sans serif"
 
 [server]
 headless = true
-fileWatcherType = "none"
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = "none"
