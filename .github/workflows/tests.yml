@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.11 is the only version the pinned torch/tokenizers/transformers trio resolves on,
+          # and the version the app is verified against locally.
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # The suite builds the real index and loads the real encoder, so it needs the writable
+      # paths a checkout gives it. data/ is not read-only here the way it is on Community Cloud,
+      # so GROWW_STATE_DIR stays unset and everything resolves against the repo as usual.
+      - name: Test
+        run: python -m pytest -q --ignore=tests/e2e_chat.py
+
+      - name: Layering
+        run: python -m pytest -q tests/test_layering.py
+
+      - name: CLI still works
+        run: python -m src.pipeline --help

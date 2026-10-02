@@ -321,3 +321,27 @@ def test_configure_console_is_harmless_without_a_reconfigurable_stream() -> None
         patch.setattr(sys, "stdout", _NoReconfigure())
         patch.setattr(sys, "stderr", _NoReconfigure())
         configure_console()
+
+
+def test_state_dir_relocates_writable_paths_only(tmp_path, monkeypatch) -> None:
+    """GROWW_STATE_DIR must move everything the app writes, and nothing it reads.
+
+    A hosted deploy mounts the repository read-only and offers scratch space instead, so the
+    Chroma store, model cache, processed corpus and dumps all have to move while `raw_dir` and
+    `sources_csv` stay put, since those are the committed inputs the build reads.
+    """
+    settings = load_settings()
+    monkeypatch.setenv("GROWW_STATE_DIR", str(tmp_path))
+
+    for key in ("chroma_dir", "model_cache_dir", "processed_dir", "chunks_dump", "vectors_dump"):
+        resolved = settings.paths.resolve(key)
+        assert str(resolved).startswith(str(tmp_path)), f"{key} must live in the state dir"
+
+    assert settings.paths.resolve("raw_dir") == REPO_ROOT / "data" / "raw"
+    assert settings.paths.resolve("sources_csv") == REPO_ROOT / "data" / "sources.csv"
+
+
+def test_paths_default_to_the_repo_when_no_state_dir_is_set(monkeypatch) -> None:
+    monkeypatch.delenv("GROWW_STATE_DIR", raising=False)
+    settings = load_settings()
+    assert settings.paths.resolve("chroma_dir") == REPO_ROOT / settings.paths.chroma_dir

@@ -330,16 +330,16 @@ The load-bearing pins, and what breaks without them:
 
 ## Deploying
 
-The app is a single Streamlit process with no API key required, so it deploys as-is to
+The app is a single Streamlit process with no API key required, so it deploys to
 **[Streamlit Community Cloud](https://share.streamlit.io)** (free, GitHub login). That host is the
-right target for this app specifically: it runs a long-lived WebSocket server, has a persistent disk
-for the index, and supports `torch`. Serverless hosts such as Vercel do not — see
-[Known limits](#known-limits).
+right target for this app specifically: it runs a long-lived WebSocket server and supports `torch`.
+Serverless hosts such as Vercel do not — see [Known limits](#known-limits).
 
 ```bash
 # 1. push, then create the app at share.streamlit.io -> "Deploy" -> pick imyouday/Groww -> main
 # 2. click "Advanced settings" and set Python to 3.11
-# 3. deploy (no secrets needed - see below)
+# 3. in the same panel add one environment variable:  GROWW_STATE_DIR=/tmp/groww
+# 4. deploy (no secrets needed - see below)
 ```
 
 **Python 3.11 is a manual step, and it is not optional.** Community Cloud ignores `runtime.txt`,
@@ -348,22 +348,42 @@ pinned `torch`/`tokenizers`/`transformers` trio does not resolve. You choose the
 deploy dialog, and after the first deploy the only way to change it is to delete the app and
 redeploy it. Select 3.11 the first time.
 
-Two things happen on the hosted host that do not happen locally, both by design:
+**`GROWW_STATE_DIR=/tmp/groww` is the other manual step.** Community Cloud mounts the repository
+read-only, so every path the app *writes* has to live outside it. Setting this relocates
+`data/chroma`, `data/models`, `data/processed`, `data/chunks.jsonl` and `data/chunks_and_vectors.txt`
+into that directory, and leaves the committed inputs (`data/raw`, `data/sources.csv`) in the repo
+where the build reads them. Without it the first boot fails on `mkdir` against the read-only mount.
+Locally the variable is unset and every path resolves against the repo root as before, so the same
+commit is both the local and the hosted app.
+
+Three things happen on the hosted host that do not happen locally, all by design:
 
 - **The index builds itself on first boot.** `data/chroma/` is derived state and is not committed
   (architecture.md §18.1), so a fresh clone starts with an empty collection. `warm_index()` builds it
   from the committed `data/raw` snapshots instead of raising: about 12 s, no network, and it
-  reproduces `corpus_hash 924af25c…` exactly. Only the UI self-heals — `answer()` still raises
+  reproduces the committed `corpus_hash` exactly. Only the UI self-heals — `answer()` still raises
   `IndexNotBuiltError` when the index is absent, so a script that skipped the build is told rather
   than silently handed a 12-second wait.
-- **The embedding model downloads on first boot** (87 MB, cached on the persistent disk afterwards).
-  Every later session reuses the cache, so this is a one-time cost per redeploy.
+- **The embedding model downloads on first boot** (87 MB). `/tmp` is wiped when the app is put to
+  sleep, so this is re-downloaded on the next wake, not a one-time cost per deploy.
+- **Memory is the real constraint, not the corpus.** Community Cloud's free tier gives roughly 1 GB,
+  and `torch` plus `sentence-transformers` is most of it. Keep `embedding.device: cpu` in
+  `config.yaml`; the app will cold-start slowly but will not be OOM-killed.
 
 `.streamlit/config.toml` sets `server.headless` and turns `browser.gatherUsageStats` off, since
-NFR-7 rules out telemetry and Streamlit's own counter is a telemetry channel. It deliberately sets no
-`[theme]` block, because `src/theme.py` owns the light/dark toggle. Save that file as UTF-8 **without**
-a byte-order mark: Streamlit's TOML reader treats a BOM as part of the first key name and refuses to
-start.
+NFR-7 rules out telemetry and Streamlit's own counter is a telemetry channel. It pins
+`server.address = "127.0.0.1"` so a local run is loopback-only rather than published on the LAN, and
+`client.showErrorDetails = "full"` so a local failure shows the real exception. **Both of those are
+wrong for a public URL**: Community Cloud needs to bind `0.0.0.0` to be reachable, and
+`showErrorDetails = "full"` publishes tracebacks. Before deploying, change those two values in
+`.streamlit/config.toml` — this file is committed, so the edit is part of the commit that goes to
+the public host, not a local override. `src/theme.py` still owns the light/dark toggle; the
+`[theme]` block here is only the light-mode baseline that loads before the first rerun. Save the
+file as UTF-8 **without** a byte-order mark: Streamlit's TOML reader treats a BOM as part of the
+first key name and refuses to start.
+
+> Not yet done: the repo still ships the loopback `address` and `showErrorDetails = "full"`, so the
+> public deploy needs that one-line pair changed first. Everything else in this section is in place.
 
 Run it with **no secrets at all** and it uses the extractive composer — the designed zero-key mode
 (determinism driver D4). Answers still come from the corpus with a citation, and they are *faster*

@@ -29,6 +29,11 @@ from src.models import PipelineError
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "config.yaml"
 
+ENV_STATE_DIR = "GROWW_STATE_DIR"
+WRITABLE_PATH_KEYS = frozenset(
+    {"chroma_dir", "model_cache_dir", "chunks_dump", "vectors_dump", "processed_dir"}
+)
+
 
 class ChunkingStrategy(str, Enum):
     SEMANTIC_SECTION = "semantic_section"
@@ -54,8 +59,18 @@ class PathsSettings:
     model_cache_dir: str
 
     def resolve(self, key: str) -> Path:
-        """Return a config-declared path resolved against the repository root, never the CWD."""
-        return REPO_ROOT / getattr(self, key)
+        """Return a config-declared path resolved against the repository root, never the CWD.
+
+        GROWW_STATE_DIR relocates the writable paths, which is what a read-only deployment needs:
+        Streamlit Cloud mounts the repo read-only and provides scratch space at /tmp, so the Chroma
+        store and the model cache are rebuilt there on first boot instead of failing to mkdir.
+        """
+        value = getattr(self, key)
+        if key in WRITABLE_PATH_KEYS:
+            state_dir = os.environ.get(ENV_STATE_DIR)
+            if state_dir:
+                return Path(state_dir) / Path(value).name
+        return REPO_ROOT / value
 
 
 @dataclass(frozen=True)
