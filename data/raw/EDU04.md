@@ -1,0 +1,11 @@
+---
+title: "What is Exit Load in Mutual Funds"
+source_name: "AMFI Investor Education"
+source_url: "https://www.amfiindia.com/investor-corner/exit-load"
+as_of_date: "2026-01-15"
+doc_type: "education"
+---
+
+**Exit Load** is a fee charged when you redeem your mutual fund units before a specified holding period.
+
+Not all funds have an exit load. When present, it is typically a percentage of the redemption value (e.g., 1% if redeemed within 1 year). The load period and rate vary by scheme. Exit load discourages short-term trading and protects long-term investors. After the load period ends, redemptions are free. SIP installments each have their own holding period — the load applies per installment based on its purchase date.

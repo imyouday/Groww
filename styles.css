@@ -1,29 +1,58 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --groww-teal: #00D09C;
-  --groww-teal-hover: #00B386;
-  --groww-teal-light: #E6FFF9;
-  --groww-slate: #1E293B;
-  --groww-slate-light: #64748B;
-  --groww-amber: #F59E0B;
-  --groww-red: #EF4444;
-  --groww-bg: #F4F6F8;
-  --groww-white: #FFFFFF;
-  --groww-border: #E5E7EB;
-  --groww-border-focus: #00D09C;
+  /* Groww Design Tokens (from groww.in) */
+  --groww-primary: #04b488;
+  --groww-primary-hover: #04ad83;
+  --groww-primary-light: #e9faf3;
+  --groww-primary-subtle: #ddf5ee;
+  
+  --groww-slate: #44475b;
+  --groww-slate-light: #7c7e8c;
+  --groww-slate-lighter: #a1a3ad;
+  
+  --groww-amber: #ffb61b;
+  --groww-red: #ed5533;
+  
+  --groww-bg: #f8f8f8;
+  --groww-white: #ffffff;
+  --groww-border: #e9e9eb;
+  --groww-border-focus: #04b488;
+  
   --groww-radius-sm: 8px;
   --groww-radius-md: 12px;
   --groww-radius-lg: 16px;
   --groww-radius-full: 9999px;
-  --groww-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
-  --groww-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+  
+  --groww-shadow-sm: 0 1px 2px rgba(18, 18, 18, 0.04), 0 2px 4px rgba(18, 18, 18, 0.03);
+  --groww-shadow-md: 0 4px 12px rgba(18, 18, 18, 0.05);
+  --groww-shadow-lg: 0 8px 24px rgba(18, 18, 18, 0.06);
+  
   --groww-max-width: 720px;
+  
+  /* Font sizes (rem) */
+  --fs-xs: 0.625rem;   /* 10px */
+  --fs-sm: 0.75rem;    /* 12px */
+  --fs-base: 0.875rem; /* 14px */
+  --fs-md: 1rem;       /* 16px */
+  --fs-lg: 1.125rem;   /* 18px */
+  --fs-xl: 1.25rem;    /* 20px */
+  --fs-2xl: 1.375rem;  /* 22px */
+  --fs-3xl: 1.5rem;    /* 24px */
+  --fs-4xl: 1.75rem;   /* 28px */
+  --fs-5xl: 2rem;      /* 32px */
+  
+  /* Font weights */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
 }
 
 * {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-regular);
 }
 
 html, body, [data-testid="stAppViewContainer"] {
@@ -88,7 +117,7 @@ section.main {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: var(--groww-teal);
+  background: var(--groww-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,13 +190,44 @@ section.main {
 }
 
 .groww-chip:hover {
-  border-color: var(--groww-teal);
-  color: var(--groww-teal);
-  background: var(--groww-teal-light);
+  border-color: var(--groww-primary);
+  color: var(--groww-primary);
+  background: var(--groww-primary-light);
 }
 
 .groww-chip:active {
   transform: scale(0.98);
+}
+
+/* Suggestion chips are real st.button widgets, not raw HTML, so the pill look is applied to
+   Streamlit's own button element. Scoped to the main block so the chat input's submit button
+   is left to the styling above it. */
+[data-testid="stMainBlockContainer"] [data-testid="stButton"] button {
+  background: var(--groww-white) !important;
+  color: var(--groww-slate-light) !important;
+  border: 1px solid var(--groww-border) !important;
+  border-radius: var(--groww-radius-full) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  padding: 10px 16px !important;
+  white-space: normal !important;
+  text-align: center !important;
+  transition: all 0.15s ease !important;
+  box-shadow: none !important;
+}
+
+[data-testid="stMainBlockContainer"] [data-testid="stButton"] button:hover {
+  border-color: var(--groww-primary) !important;
+  color: var(--groww-primary) !important;
+  background: var(--groww-primary-light) !important;
+}
+
+[data-testid="stMainBlockContainer"] [data-testid="stButton"] button:active {
+  transform: scale(0.98) !important;
+  color: var(--groww-primary) !important;
+  border-color: var(--groww-primary) !important;
+  background: var(--groww-primary-light) !important;
 }
 
 /* Chat Thread - using native st.chat_message, only style source line */
@@ -190,7 +250,7 @@ section.main {
 }
 
 .groww-source-line a {
-  color: var(--groww-teal);
+  color: var(--groww-primary);
   text-decoration: none;
   font-weight: 500;
 }
@@ -218,7 +278,7 @@ section.main {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--groww-teal);
+  background: var(--groww-primary);
   animation: groww-typing-bounce 1.4s infinite ease-in-out both;
 }
 
@@ -250,8 +310,8 @@ section.main {
 
 /* Focus ring on outer container only */
 [data-testid="stChatInput"]:focus-within > div {
-  border-color: var(--groww-teal) !important;
-  box-shadow: 0 0 0 3px var(--groww-teal-light) !important;
+  border-color: var(--groww-primary) !important;
+  box-shadow: 0 0 0 3px var(--groww-primary-light) !important;
 }
 
 /* Remove all borders/shadows from inner elements */
@@ -280,7 +340,7 @@ section.main {
 }
 
 [data-testid="stChatInput"] button {
-  background: var(--groww-teal) !important;
+  background: var(--groww-primary) !important;
   color: #04231A !important;
   border-radius: var(--groww-radius-full) !important;
   padding: 8px 16px !important;
@@ -292,11 +352,11 @@ section.main {
 }
 
 [data-testid="stChatInput"] button:hover {
-  background: var(--groww-teal-hover) !important;
+  background: var(--groww-primary-hover) !important;
 }
 
 [data-testid="stChatInput"] button:focus-visible {
-  outline: 2px solid var(--groww-teal) !important;
+  outline: 2px solid var(--groww-primary) !important;
   outline-offset: 2px !important;
 }
 
@@ -318,7 +378,7 @@ section.main {
 
 .groww-disclaimer a:hover {
   text-decoration: underline !important;
-  color: var(--groww-teal) !important;
+  color: var(--groww-primary) !important;
 }
 
 /* DEBUG Expander */
@@ -352,54 +412,21 @@ section.main {
   word-break: break-word;
 }
 
-/* Conversation Layout: User right, Assistant left */
-[data-testid="stChatMessage"] {
-  display: flex !important;
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-/* User message - right aligned, teal bubble */
-[data-testid="stChatMessage"][aria-label="User message"] {
-  justify-content: flex-end !important;
-}
-
-[data-testid="stChatMessage"][aria-label="User message"] [data-testid="stMarkdownContainer"] {
-  background: var(--groww-teal) !important;
+/* Conversation Layout: User right, Assistant left - using columns */
+.groww-user-bubble {
+  background: var(--groww-primary) !important;
   color: #04231A !important;
   border-radius: var(--groww-radius-lg) var(--groww-radius-lg) 4px var(--groww-radius-lg) !important;
   padding: 12px 16px !important;
-  max-width: 75% !important;
+  max-width: 100% !important;
+  width: fit-content !important;
+  box-shadow: var(--groww-shadow-sm) !important;
   margin-left: auto !important;
-  width: fit-content !important;
-  box-shadow: var(--groww-shadow-sm) !important;
 }
 
-/* Hide user avatar */
-[data-testid="stChatMessage"][aria-label="User message"] [data-testid="stChatMessageAvatar"] {
-  display: none !important;
-}
-
-/* Assistant message - left aligned, white card with border */
-[data-testid="stChatMessage"][aria-label="Assistant message"] {
-  justify-content: flex-start !important;
-}
-
-[data-testid="stChatMessage"][aria-label="Assistant message"] [data-testid="stMarkdownContainer"] {
-  background: var(--groww-white) !important;
-  border: 1px solid var(--groww-border) !important;
-  color: var(--groww-slate) !important;
-  border-radius: var(--groww-radius-lg) var(--groww-radius-lg) var(--groww-radius-lg) 4px !important;
-  padding: 12px 16px !important;
-  max-width: 75% !important;
-  width: fit-content !important;
-  box-shadow: var(--groww-shadow-sm) !important;
-}
-
-/* Assistant avatar - small green G */
-[data-testid="stChatMessage"][aria-label="Assistant message"] [data-testid="stChatMessageAvatar"] {
-  background: var(--groww-teal-light) !important;
-  color: var(--groww-teal) !important;
+.groww-assistant-avatar {
+  background: var(--groww-primary-light) !important;
+  color: var(--groww-primary) !important;
   font-weight: 700 !important;
   font-size: 14px !important;
   width: 28px !important;
@@ -408,11 +435,40 @@ section.main {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  margin-top: 4px !important;
+}
+
+.groww-assistant-bubble {
+  background: var(--groww-white) !important;
+  border: 1px solid var(--groww-border) !important;
+  color: var(--groww-slate) !important;
+  border-radius: var(--groww-radius-lg) var(--groww-radius-lg) var(--groww-radius-lg) 4px !important;
+  padding: 12px 16px !important;
+  box-shadow: var(--groww-shadow-sm) !important;
+}
+
+/* Hide default Streamlit chat message elements since we use columns */
+[data-testid="stChatMessage"] {
+  display: none !important;
+}
+
+/* Ensure user bubble column content is right-aligned */
+[data-testid="stColumn"]:has(.groww-user-bubble) {
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+/* Make intermediate containers flex to propagate alignment */
+[data-testid="stColumn"]:has(.groww-user-bubble) [data-testid="stVerticalBlock"],
+[data-testid="stColumn"]:has(.groww-user-bubble) [data-testid="stElementContainer"],
+[data-testid="stColumn"]:has(.groww-user-bubble) [data-testid="stMarkdown"] {
+  display: flex !important;
+  justify-content: flex-end !important;
 }
 
 /* Ensure links in messages are styled correctly */
 [data-testid="stChatMessage"] a {
-  color: var(--groww-teal);
+  color: var(--groww-primary);
   text-decoration: none;
   font-weight: 500;
 }
@@ -443,15 +499,24 @@ section.main {
 }
 
 .groww-followup-chip:hover {
-  border-color: var(--groww-teal);
-  color: var(--groww-teal);
-  background: var(--groww-teal-light);
+  border-color: var(--groww-primary);
+  color: var(--groww-primary);
+  background: var(--groww-primary-light);
 }
 
 /* Hide default Streamlit elements */
 .stMarkdown, .stText, .stCaption {
   all: unset;
   display: contents;
+}
+
+/* Override display: contents for flex layout in chat columns */
+[data-testid="stColumn"]:has(.groww-user-bubble) [data-testid="stVerticalBlock"],
+[data-testid="stColumn"]:has(.groww-user-bubble) [data-testid="stElementContainer"],
+[data-testid="stColumn"]:has(.groww-user-bubble) [data-testid="stMarkdown"] {
+  display: flex !important;
+  justify-content: flex-end !important;
+  width: 100% !important;
 }
 
 /* Scrollbar */
@@ -475,12 +540,12 @@ section.main {
 
 /* Focus visible */
 *:focus-visible {
-  outline: 2px solid var(--groww-teal) !important;
+  outline: 2px solid var(--groww-primary) !important;
   outline-offset: 2px !important;
 }
 
 /* Selection */
 ::selection {
-  background: var(--groww-teal-light);
+  background: var(--groww-primary-light);
   color: var(--groww-slate);
 }

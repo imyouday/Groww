@@ -334,9 +334,21 @@ def test_fetch_returns_the_body_on_success(settings) -> None:
 def test_every_registered_citation_source_loads(settings, registry) -> None:
     docs, warnings = load_all(registry, settings)
     assert warnings == []
-    # Citation sources are the 5 scheme pages; education content is not citationable
-    citation_docs = [doc for doc in docs if doc.source.allowed_for_citation]
-    assert [doc.source.source_id for doc in citation_docs] == ["S1", "S2", "S3", "S4", "S5"]
+    # Citationable now means "the 5 scheme pages plus the 19 education summaries", each of which is
+    # ingested from a file:// path or a scheme page and cited at its own public URL.
+    citable = [doc.source.source_id for doc in docs if doc.source.allowed_for_citation]
+    assert citable == [f"EDU{index:02d}" for index in range(1, 20)] + ["S1", "S2", "S3", "S4", "S5"]
+
+
+def test_every_citation_source_resolves_to_an_https_citation(settings, registry) -> None:
+    docs, _ = load_all(registry, settings)
+    for doc in docs:
+        if not doc.source.allowed_for_citation:
+            continue
+        citation = registry.citation_url_for(doc.source.source_id)
+        assert citation.startswith("https://"), doc.source.source_id
+        assert registry.is_citation_allowed(citation) is True
+
 
 
 def test_every_loaded_doc_has_a_processed_file(settings, registry) -> None:

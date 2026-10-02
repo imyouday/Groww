@@ -1,0 +1,3 @@
+**Riskometer** is a standardized 6-level visual indicator of a mutual fund scheme's risk level, mandated by SEBI.
+
+Levels (low to high): **Low** → **Low to Moderate** → **Moderate** → **Moderately High** → **High** → **Very High**. Equity funds typically fall in Moderate to Very High. Debt/liquid funds are Low to Moderate. The riskometer is based on the scheme's portfolio risk (volatility, credit quality, liquidity) and is reviewed monthly. It helps investors match schemes to their risk appetite. Always check the current riskometer on the fund's factsheet or AMC website.

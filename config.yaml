@@ -60,7 +60,10 @@ retrieval:
     # scheme name of every S3 chunk, so it satisfied term coverage for a lock-in question whose answer
     # is not in the corpus. The gate must fail "is there a lock-in?" honestly rather than answer with
     # a sentence that never mentions a lock-in. docs/corpus_matrix.md records the gap.
-    lock_in: ["lock-in", "lock in", "3 years", "80c", "elss", "lockin period"]
+    # "elss" was later re-added here and is now gone for the same reason: it is the S3 scheme alias
+    # in registry.scheme_aliases, so its presence in any S3 chunk header satisfied lock-in coverage
+    # and let a tax-section chunk about redeeming within one year answer a lock-in question.
+    lock_in: ["lock-in", "lock in", "3 years", "80c", "lockin period"]
     riskometer: ["riskometer", "risk", "risk rating"]
     benchmark: ["benchmark", "index"]
     statements: ["capital gains", "statement", "tax report", "download", "capital gains statement"]
@@ -73,7 +76,10 @@ retrieval:
     nav: ["nav", "net asset value", "net asset value per unit"]
 
 generation:
-  provider: auto                      # auto | llm | extractive   (ablation A4)
+  # Default to the extractive, fully local generator. It is grounded, needs no key, makes zero
+  # network calls, answers in ~0.7 s, and never 429s. Set to "auto"/"llm" to use the optional
+  # free-tier LLM via .env (README §"The LLM is optional"); answers stay guarded either way.
+  provider: extractive                # auto | llm | extractive   (ablation A4)
   model: ""                           # empty => read LLM_MODEL from .env at call time
   temperature: 0.1
   max_tokens: 220
@@ -86,10 +92,19 @@ loading:
   timeout_s: 20
   retries: 3
   min_extracted_chars: 400
-  # Phase 0 spike: hdfcmutualfund.com is not HDFC's domain and is removed. hdfcfund.com is the
-  # real AMC domain but returns HTTP 403 to a scripted client, so it is not fetchable and is
-  # therefore absent here (docs/corpus_matrix.md §3).
-  allowed_hosts: [groww.in, amfiindia.com, www.amfiindia.com, sebi.gov.in, localhost]
+  # hdfcmutualfund.com is not HDFC's domain and is removed. hdfcfund.com is the real AMC domain
+  # but returns HTTP 403 to a scripted client, so it is not fetchable and is therefore absent here
+  # (docs/corpus_matrix.md §3). www.* entries are the canonical forms the regulator publishes under
+  # and are listed alongside the bare domain rather than by suffix, so a lookalike host such as
+  # "amfiindia.com.evil.test" still fails constraint C1.
+  # www.sebi.gov.in backs the EDU03/08/10/11/13/14/16 citations (SEBI circulars),
+  # www.camsonline.com the EDU18 citation (NSE Clearing capital-gains statement) and
+  # www.incometax.gov.in the EDU19 citation (income-tax portal). Those three rows are ingested from
+  # repository files, so nothing is fetched from them; listing them is what lets the citation pass C1.
+  allowed_hosts:
+    [groww.in, amfiindia.com, www.amfiindia.com, sebi.gov.in, www.sebi.gov.in, www.camsonline.com,
+     www.incometax.gov.in, localhost]
+
   # Blocks that carry performance figures are dropped at ingest rather than merely refused at
   # query time. PRD constraint C3 says the system never returns, computes, or compares
   # returns/NAV/performance; a retrievable return table would be a chunk the retriever can
@@ -211,9 +226,9 @@ copy:
 
   # Rotating greeting templates for LLM fallback (used when LLM is unavailable)
   greeting_templates:
-    - "Hi there! 👋 Great to see you. I can explain mutual fund basics and share facts about {scheme_count} HDFC schemes. What would you like to know?"
+    - "Hi there! Great to see you. I can explain mutual fund basics and share facts about {scheme_count} HDFC schemes. What would you like to know?"
     - "Hello! I'm ready to help with HDFC mutual fund facts — expense ratios, exit loads, SIP minimums, lock-ins, and more. What's on your mind?"
-    - "Hey! 👋 Happy to assist. Ask me anything about the HDFC schemes I cover."
+    - "Hey! Happy to assist. Ask me anything about the HDFC schemes I cover."
     - "Hi! I can share verified facts about HDFC mutual fund schemes. What would you like to learn?"
 
   # Unclear question handling
@@ -225,3 +240,11 @@ copy:
   unclear_examples:
     - "What is the expense ratio of HDFC Large Cap?"
     - "What is NAV?"
+
+# Intent router (src/intent_router.py). The rule-based pass always runs.
+# llm_fallback adds a SECOND third-party LLM call that ships the question and the last four
+# conversation turns to the configured endpoint. It is off by default so that holding a key for
+# generation does not silently opt the deployment into that egress. Turn it on only if the extra
+# privacy surface and the doubled latency/quota are acceptable.
+intent_router:
+  llm_fallback: false

@@ -40,7 +40,10 @@ class PIIKind(str, Enum):
 
 
 PII_PATTERNS: dict[PIIKind, re.Pattern[str]] = {
-    PIIKind.PAN: re.compile(r"\b(?P<secret>[A-Z]{5}\d{4}[A-Z])\b"),
+    # re.IGNORECASE because people type their PAN in lower case, and a detector that misses the
+    # lower-case form is not a detector. The \b anchors keep it from matching inside a longer word.
+    PIIKind.PAN: re.compile(r"\b(?P<secret>[A-Z]{5}\d{4}[A-Z])\b", re.IGNORECASE),
+
     PIIKind.AADHAAR: re.compile(
         rf"{_LABELLED_NUMBER}{_LABEL_LINK}(?::\s*)?"
         rf"(?P<secret>[2-9]\d{{3}}{_SEP}\d{{4}}{_SEP}\d{{4}}(?:{_SEP}[Xx])?)\b",

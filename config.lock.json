@@ -1,10 +1,10 @@
 {
-  "lock_version": 1,
+  "lock_version": 2,
   "frozen_for": "v1.0-class-demo",
   "python": "3.11.9",
-  "config_hash": "c6fae467b32678c7373aac09ffe95898ed9eeec4dc0dadc052384d6119121193",
-  "corpus_hash": "924af25cea195b3a94f797eed707ddacb3a7a77422dc2d4115b9a099a6c54291",
-  "chunk_count": 106,
+  "config_hash": "9a509ce6bbb7ff4132c06d6f00f5010a85b6b8929e72130a60615c39181e77c1",
+  "corpus_hash": "6058a79633e6c80ed36bb680023891a40836a3e9a9b1047313680b4ec31e5c68",
+  "chunk_count": 129,
   "config": {
     "paths": {
       "raw_dir": "data/raw",
@@ -69,17 +69,23 @@
           "min. for sip",
           "min. for",
           "minimum investment",
-          "minimum amount"
+          "minimum amount",
+          "sip",
+          "systematic investment plan",
+          "lump sum",
+          "lumpsum"
         ],
         "lock_in": [
           "lock-in",
           "lock in",
           "3 years",
-          "80c"
+          "80c",
+          "lockin period"
         ],
         "riskometer": [
           "riskometer",
-          "risk"
+          "risk",
+          "risk rating"
         ],
         "benchmark": [
           "benchmark",
@@ -89,12 +95,53 @@
           "capital gains",
           "statement",
           "tax report",
-          "download"
+          "download",
+          "capital gains statement"
+        ],
+        "aum": [
+          "aum",
+          "assets under management",
+          "asset under management"
+        ],
+        "direct_vs_regular": [
+          "direct",
+          "regular",
+          "direct plan",
+          "regular plan",
+          "direct vs regular"
+        ],
+        "growth_vs_idcw": [
+          "growth",
+          "idcw",
+          "dividend",
+          "growth vs idcw",
+          "growth option",
+          "idcw option"
+        ],
+        "kyc": [
+          "kyc",
+          "know your customer"
+        ],
+        "nominee": [
+          "nominee",
+          "nomination"
+        ],
+        "cutoff_time": [
+          "cut-off",
+          "cutoff",
+          "cut off time",
+          "cut-off time",
+          "cutoff time"
+        ],
+        "nav": [
+          "nav",
+          "net asset value",
+          "net asset value per unit"
         ]
       }
     },
     "generation": {
-      "provider": "auto",
+      "provider": "extractive",
       "model": "",
       "temperature": 0.1,
       "max_tokens": 220,
@@ -110,7 +157,12 @@
       "allowed_hosts": [
         "groww.in",
         "amfiindia.com",
-        "sebi.gov.in"
+        "www.amfiindia.com",
+        "sebi.gov.in",
+        "www.sebi.gov.in",
+        "www.camsonline.com",
+        "www.incometax.gov.in",
+        "localhost"
       ],
       "drop_class_substrings": [
         "returnCalculator",
@@ -201,17 +253,56 @@
       "pii_refusal": "Please don't share personal identifiers like PAN, Aadhaar, account numbers, or OTPs — I won't store them. For account-specific help, use the official support channel: {link}.",
       "out_of_corpus_message": "My sources cover only HDFC AMC's {scheme_count} schemes ({schemes}), all facts-only. I can't answer from a page I don't have — please treat anything about other funds as unverified here. If you meant an in-scope scheme, I can share its documented facts: {link}",
       "not_in_corpus_message": "I don't have that in my sources for the {scheme_count} HDFC AMC schemes I cover, so I won't guess. The official scheme page is the place to check: {link}",
-      "smalltalk_message": "I'm a facts-only assistant for {scheme_count} HDFC AMC mutual fund schemes. I can tell you the expense ratio, exit load, minimum SIP, ELSS lock-in, riskometer, benchmark, and how to download statements — each answer with one official source link. I never give investment advice."
+      "smalltalk_message": "I'm a facts-only assistant for {scheme_count} HDFC AMC mutual fund schemes. I can tell you the expense ratio, exit load, minimum SIP, ELSS lock-in, riskometer, benchmark, and how to download statements — each answer with one official source link. I never give investment advice.",
+      "greeting_templates": [
+        "Hi there! Great to see you. I can explain mutual fund basics and share facts about {scheme_count} HDFC schemes. What would you like to know?",
+        "Hello! I'm ready to help with HDFC mutual fund facts — expense ratios, exit loads, SIP minimums, lock-ins, and more. What's on your mind?",
+        "Hey! Happy to assist. Ask me anything about the HDFC schemes I cover.",
+        "Hi! I can share verified facts about HDFC mutual fund schemes. What would you like to learn?"
+      ],
+      "unclear_replies": [
+        "I want to make sure I give you the right answer. Could you clarify what you'd like to know? For example: \"What is the exit load for HDFC Small Cap?\" or \"What is NAV?\"",
+        "Could you rephrase that? I can help with things like expense ratios, exit loads, minimum SIP amounts, lock-in periods, benchmarks, and risk ratings for HDFC funds.",
+        "I'm not sure I caught that. Try asking about a specific fund fact (e.g., \"exit load of HDFC Flexi Cap\") or a general concept (e.g., \"what is NAV?\")."
+      ],
+      "unclear_examples": [
+        "What is the expense ratio of HDFC Large Cap?",
+        "What is NAV?"
+      ]
     },
     "ui": {
-      "title": "Mutual Fund FAQ Assistant — Facts Only",
-      "scope_line": "HDFC AMC · 5 schemes · public sources only",
-      "placeholder": "Ask a factual question about the covered schemes",
-      "link_label": "View source",
-      "chat_input_label": "Chat",
+      "title": "Mutual Fund Assistant",
+      "scope_line": "Facts-Only · Grounded in official mutual fund sources",
+      "hero_title": "Groww MF Intelligence",
+      "hero_body": "Ask factual questions about the covered schemes — expense ratios, exit loads, minimum SIP amounts, lock-in periods and tax treatment. Every answer is lifted from the retrieved source and carries a link to it.",
+      "badge_verified": "Verified Source Bot",
+      "badge_no_advice": "No Advice · Informational Only",
+      "placeholder": "Ask a factual question (e.g. minimum SIP, benchmark, TER)…",
+      "link_label": "View Filing",
       "sources_label": "Sources used",
       "index_missing_title": "No index found",
       "index_missing_message": "This app needs the offline index before it can answer anything. From the project root, run:",
+      "nav_links": [
+        "Explore",
+        "Investments",
+        "Mutual Funds",
+        "AI FAQ Assistant"
+      ],
+      "nav_active_link": "AI FAQ Assistant",
+      "breadcrumb": [
+        "Home",
+        "Mutual Funds",
+        "AI FAQ & Statutory Document Assistant"
+      ],
+      "footer_disclaimer": "Mutual fund investments are subject to market risks. Read all scheme related documents carefully.",
+      "footer_links": [
+        "Statutory Disclosures",
+        "Terms of Use",
+        "Privacy Policy",
+        "SEBI Circulars"
+      ],
+      "privacy_note": "Privacy Safeguard: Do not provide PAN, Folio IDs, or bank credentials.",
+      "chip_row_label": "Popular Factual Queries",
       "example_questions": [
         "What is the expense ratio of the HDFC Large Cap fund?",
         "What is the exit load on the HDFC Small Cap fund?",
@@ -222,6 +313,9 @@
         "What is the benchmark of the HDFC Balanced Advantage fund?",
         "What is the minimum SIP amount for the HDFC Large Cap fund?"
       ]
+    },
+    "intent_router": {
+      "llm_fallback": false
     }
   },
   "embedding_model": {
@@ -244,6 +338,8 @@
       "source_id": "E1",
       "scheme_id": "",
       "url": "https://www.amfiindia.com/",
+      "citation_url": "",
+      "allowed_for_citation": false,
       "fetched_at": "2026-09-27",
       "processed_text_sha256": ""
     },
@@ -251,27 +347,206 @@
       "source_id": "E2",
       "scheme_id": "",
       "url": "https://groww.in/help",
+      "citation_url": "",
+      "allowed_for_citation": false,
       "fetched_at": "2026-09-27",
       "processed_text_sha256": ""
+    },
+    {
+      "source_id": "EDU01",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU01.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/nav",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "fea298c5362f0c245ac6cc45ad8dbf11bb5a74bb11c16ad057400ba5008e4846"
+    },
+    {
+      "source_id": "EDU02",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU02.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/aum",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "dda588474b4a5c803bf43170d6388e7bde2c2265daa3c5de337f6a7155b8a92d"
+    },
+    {
+      "source_id": "EDU03",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU03.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/mar-2023/total-expense-ratio-ter-of-mutual-fund-schemes_68419.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "6e92efa72f1a61fa352f191f4126d5e3688b9e04ca7fa5d28825aa1c85ed2700"
+    },
+    {
+      "source_id": "EDU04",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU04.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/exit-load",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "90792e8ab155cd707de2fde331b818a896f52fce1b1819ffacb3c7810a876747"
+    },
+    {
+      "source_id": "EDU05",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU05.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/sip-vs-lumpsum",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "f9afb6c98a1a727bcb7a2cc5bb514e3abf9c1cee9bd020cbc8eaa6f9472a631d"
+    },
+    {
+      "source_id": "EDU06",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU06.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/stp-swp",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "b4e0f95992a0924a44b31c7519ed5efedbf1e52841efa70870bba795c491f14b"
+    },
+    {
+      "source_id": "EDU07",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU07.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/elss",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "0a9e247b990a7179fc6c7b4339fca534d99a137797e9c268e965d5aba9e70e9b"
+    },
+    {
+      "source_id": "EDU08",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU08.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/jan-2013/direct-plan-in-mutual-fund-schemes_28453.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "4bb7388ec41470406fa1ade25a7331c387e5a574e109bd179a0895acd290357f"
+    },
+    {
+      "source_id": "EDU09",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU09.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/growth-vs-idcw",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "3f483a33dc0eb3413ac9164967f499b221971bf95b1a22d239e8dd7ecebeb8d4"
+    },
+    {
+      "source_id": "EDU10",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU10.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/sep-2020/riskometer-for-mutual-fund-schemes_47289.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "2ad82a90f076f9f292c6c518fc30c393f921879aef8d754638934dd23bd72bf1"
+    },
+    {
+      "source_id": "EDU11",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU11.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/may-2012/benchmarking-of-mutual-fund-schemes_24202.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "2ade802acd549a2c301d5a5a827e57b4a6b686a7bceefd6f7739e0345ca82fe5"
+    },
+    {
+      "source_id": "EDU12",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU12.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/cagr-xirr",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "f3ed7891c8a457bac963ee4e9b6988ab54e70d8c735d1e9354077200a2298f61"
+    },
+    {
+      "source_id": "EDU13",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU13.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/oct-2017/categorization-and-rationalization-of-mutual-fund-schemes_36266.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "f68e7864c9a76c878e68cb0a3648463e1ec9d7e0462d6d27f36aa9b5e242f64a"
+    },
+    {
+      "source_id": "EDU14",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU14.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/jan-2022/kyc-registration-agency_52834.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "a962ce03dcea3a6e95183610e8786a464b3f0410b3ddd61ef4825c67aa99795b"
+    },
+    {
+      "source_id": "EDU15",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU15.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/cut-off-time",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "e2cb464339eac7ca8b15df0a8b3000a7ca6ed5202dd0f64f02dc9fc5ab88eb7a"
+    },
+    {
+      "source_id": "EDU16",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU16.md",
+      "citation_url": "https://www.sebi.gov.in/legal/circulars/may-2018/scheme-information-document_39121.html",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "a31d9e0cdbb02668c8b66045b1d4f25bd7be36fef75351e4980bedeff10302aa"
+    },
+    {
+      "source_id": "EDU17",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU17.md",
+      "citation_url": "https://www.amfiindia.com/investor-corner/portfolio-metrics",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "2b9b7e7e8a502a768c064cf65894aa81e14df4d5ebbec3d5994e0d6754417452"
+    },
+    {
+      "source_id": "EDU18",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU18.md",
+      "citation_url": "https://www.camsonline.com/investor-services/capital-gains-statement",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "2df94f2673f30592599639aade1d1c62b792225a59dc74cbc4842f847f5b2e52"
+    },
+    {
+      "source_id": "EDU19",
+      "scheme_id": "",
+      "url": "file://data/raw/EDU19.md",
+      "citation_url": "https://www.incometax.gov.in/iec/foportal/",
+      "allowed_for_citation": true,
+      "fetched_at": "2026-01-15",
+      "processed_text_sha256": "fc4983fc2fc6aa6264e40971be496681b68605da57eb3909e9a72e0860ef2de6"
     },
     {
       "source_id": "S1",
       "scheme_id": "S1",
       "url": "https://groww.in/mutual-funds/hdfc-large-cap-fund-direct-growth",
+      "citation_url": "",
+      "allowed_for_citation": true,
       "fetched_at": "2026-09-27",
-      "processed_text_sha256": "ee427ae346cba19fda092e9bb23da484d668bce46794d588d88164b45d615add"
+      "processed_text_sha256": "a2242432ab7c77bb583186844fbdf58f559e0b6bceb1765dcdad80925f886135"
     },
     {
       "source_id": "S2",
       "scheme_id": "S2",
       "url": "https://groww.in/mutual-funds/hdfc-equity-fund-direct-growth",
+      "citation_url": "",
+      "allowed_for_citation": true,
       "fetched_at": "2026-09-27",
-      "processed_text_sha256": "bb3065d7d70bf724586610af453fbaad93d56e738258b1c7e9fe24934bd69d93"
+      "processed_text_sha256": "bd920743dc530290b84a05af0fd1cd4d3c44a53222eb9eeb25279909e2f1ea7c"
     },
     {
       "source_id": "S3",
       "scheme_id": "S3",
       "url": "https://groww.in/mutual-funds/hdfc-elss-tax-saver-fund-direct-plan-growth",
+      "citation_url": "",
+      "allowed_for_citation": true,
       "fetched_at": "2026-09-27",
       "processed_text_sha256": "77fdd784946349a595c53f4e9c08e21ae02081ed5759ffbcff406d616dc98cac"
     },
@@ -279,6 +554,8 @@
       "source_id": "S4",
       "scheme_id": "S4",
       "url": "https://groww.in/mutual-funds/hdfc-small-cap-fund-direct-growth",
+      "citation_url": "",
+      "allowed_for_citation": true,
       "fetched_at": "2026-09-27",
       "processed_text_sha256": "f2ba3a45318a270abd852694376ffe0e7cfd045aebcc61ba750ea5b71121b7b3"
     },
@@ -286,6 +563,8 @@
       "source_id": "S5",
       "scheme_id": "S5",
       "url": "https://groww.in/mutual-funds/hdfc-balanced-advantage-fund-direct-growth",
+      "citation_url": "",
+      "allowed_for_citation": true,
       "fetched_at": "2026-09-27",
       "processed_text_sha256": "4d4944ee8c2967db165e9be4b2f2b37a0a4bfc26105677ad87869bd3abd3c1e6"
     }
@@ -320,6 +599,7 @@
     "frozenlist": "1.8.0",
     "fsspec": "2026.9.0",
     "googleapis-common-protos": "1.75.4",
+    "greenlet": "3.5.6",
     "grpcio": "1.84.0",
     "h11": "0.16.0",
     "hf-xet": "1.6.0",
@@ -331,14 +611,14 @@
     "importlib_resources": "7.1.0",
     "iniconfig": "2.3.0",
     "itsdangerous": "2.2.0",
-    "jinja2": "3.1.6",
+    "Jinja2": "3.1.6",
     "joblib": "1.6.0",
     "jsonschema": "4.26.0",
     "jsonschema-specifications": "2025.9.1",
     "kubernetes": "36.0.3",
     "lxml": "6.1.3",
     "markdown-it-py": "4.2.0",
-    "markupsafe": "3.0.3",
+    "MarkupSafe": "3.0.3",
     "mdurl": "0.1.2",
     "mmh3": "5.3.0",
     "mpmath": "1.3.0",
@@ -365,6 +645,7 @@
     "pandas": "3.0.6",
     "pillow": "12.3.0",
     "pip": "26.2.1",
+    "playwright": "1.63.0",
     "pluggy": "1.6.0",
     "posthog": "7.60.1",
     "propcache": "0.5.4",
@@ -373,14 +654,16 @@
     "pydantic": "2.13.5",
     "pydantic_core": "2.46.5",
     "pydeck": "0.9.3",
-    "pygments": "2.21.0",
-    "pypika": "0.51.1",
+    "pyee": "13.0.1",
+    "Pygments": "2.21.0",
+    "PyPika": "0.51.1",
     "pyproject_hooks": "1.3.3",
     "pytest": "9.1.1",
+    "pytest-asyncio": "1.4.0",
     "python-dateutil": "2.9.0.post0",
     "python-dotenv": "1.2.3",
     "python-multipart": "0.0.32",
-    "pyyaml": "6.0.3",
+    "PyYAML": "6.0.3",
     "referencing": "0.37.0",
     "regex": "2026.9.10",
     "requests": "2.34.2",

@@ -1,0 +1,3 @@
+**SIP (Systematic Investment Plan)** lets you invest a fixed amount at regular intervals (e.g., monthly). **Lump sum** means investing a large amount at once.
+
+SIP averages your purchase price over time (rupee cost averaging), reducing the impact of market volatility. It builds discipline and suits salaried investors. Lump sum can outperform if invested at a market low, but timing the market is difficult. For most retail investors, SIP is the recommended approach for equity funds. You can also combine both: start with a lump sum and continue with SIP.

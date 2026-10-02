@@ -25,6 +25,20 @@ from src.models import ModelNotCachedError, PipelineError
 
 EMBED_DIM = 384
 
+# Windows ERROR_COMMITMENT_LIMIT, ERROR_SYSTEM_PAGEFILE_QUOTA/INSUFFICIENT_MEMORY, ERROR_NOT_ENOUGH_MEMORY,
+# and the POSIX ENOMEM/EAGAIN family. Mapping these to "model not cached" is the misdiagnosis this
+# table exists to prevent.
+_RESOURCE_ERROR_CODES = frozenset({8, 1454, 1455, 39})
+
+
+def _is_resource_exhaustion(error: OSError) -> bool:
+    """Report whether an OSError means the machine ran out of a resource, not a missing file."""
+    if isinstance(error, MemoryError):
+        return True
+    codes = {getattr(error, "errno", None), getattr(error, "winerror", None)}
+    return bool(codes & _RESOURCE_ERROR_CODES)
+
+
 
 @lru_cache(maxsize=1)
 def get_encoder() -> SentenceTransformer:
@@ -38,9 +52,20 @@ def get_encoder() -> SentenceTransformer:
     fails with a bare `OSError` from deep inside huggingface_hub. That is turned into
     `ModelNotCachedError` naming the cache directory and both remedies, because "it should not
     crash" is a requirement and a stack trace from a transitive dependency is not an answer.
+
+    Only a *missing* cache, or a hub that cannot be reached, is reported as a missing cache. The
+    resource-exhaustion OSErrors are re-raised instead, because the real one on this codebase was
+    `OSError 1455` (Windows ERROR_COMMITMENT_LIMIT, "paging file too small") while mmap-ing the
+    safetensors weights, and reporting that as "the model is not cached" sends an operator to
+    re-download 87 MB forever.
     """
     settings = load_settings()
     cache_dir = settings.paths.resolve("model_cache_dir")
+    if not cache_dir.exists():
+        raise ModelNotCachedError(
+            f"no model cache at {cache_dir}; run `python -m src.pipeline build` once while online, "
+            f"or copy the data/models/ directory from a machine that already has it"
+        )
     try:
         return SentenceTransformer(
             settings.embedding.model_id,
@@ -48,11 +73,15 @@ def get_encoder() -> SentenceTransformer:
             device=settings.embedding.device,
         )
     except OSError as error:
+        if _is_resource_exhaustion(error):
+            raise
         raise ModelNotCachedError(
             f"could not load {settings.embedding.model_id} from {cache_dir} and could not reach "
             "the model hub; run `python -m src.pipeline build` once while online, or copy the "
             f"data/models/ directory from a machine that already has it ({cache_dir})"
         ) from error
+
+
 
 
 @lru_cache(maxsize=1)

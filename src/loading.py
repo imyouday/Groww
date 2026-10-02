@@ -125,15 +125,41 @@ def assert_url_allowed(url: str, settings: Settings) -> str:
     return host
 
 
+def local_path_for(url: str) -> str:
+    """Resolve a `file://` source URL to an absolute path inside the repository, or raise.
+
+    Two defects are fixed here. The old code did `url.replace("file://", "")` and opened the
+    result, which resolved against the *process working directory* — so an app started from
+    anywhere other than the repo root silently lost every local source. And nothing stopped a
+    `file://` row in sources.csv from pointing outside the repository. The path is now anchored to
+    REPO_ROOT and confined to it.
+    """
+    from src.config import REPO_ROOT
+
+    raw = url[len("file://") :] if url.startswith("file://") else url
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(REPO_ROOT):
+        raise SourceNotAllowed(
+            f"local source {url!r} resolves outside the repository ({resolved})"
+        )
+    return str(resolved)
+
+
 def fetch(url: str, settings: Settings, client: httpx.Client | None = None) -> str:
     """Return the raw HTML of url, retrying with backoff. Raises SourceFetchError on failure."""
     # Handle local file:// URLs for education content
     if url.startswith("file://"):
-        path = url.replace("file://", "")
+        try:
+            path = local_path_for(url)
+        except SourceNotAllowed:
+            raise
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return f.read()
-        except Exception as exc:
+        except OSError as exc:
             raise SourceFetchError(f"could not read local file {path}: {exc}")
 
     assert_url_allowed(url, settings)

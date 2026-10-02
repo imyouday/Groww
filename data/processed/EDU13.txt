@@ -1,0 +1,14 @@
+SEBI mandates that every mutual fund scheme fit into one standard category. Main equity categories:
+
+- **Large Cap**: Minimum 80% in large-cap stocks (top 100 by market cap)
+- **Mid Cap**: Minimum 65% in mid-cap stocks (101st–250th)
+- **Small Cap**: Minimum 65% in small-cap stocks (251st onward)
+- **Flexi Cap**: Minimum 65% in equity, free to move across market caps
+- **Multi Cap**: Minimum 75% in equity, with at least 25% each in large/mid/small
+- **ELSS**: Minimum 80% in equity, 3-year lock-in, tax benefit under 80C
+- **Hybrid / Balanced Advantage**: Mix of equity and debt, dynamic allocation
+- **Debt Categories**: Liquid, Ultra Short, Low Duration, Money Market, Short Duration, Medium, Medium to Long, Long Duration, Corporate Bond, Credit Risk, Banking & PSU, Gilt, Floater
+- **Index Funds / ETFs**: Replicate a specific index (NIFTY 50, SENSEX, etc.)
+- **FoF (Fund of Funds)**: Invests in other mutual fund schemes (domestic or overseas)
+
+The category defines the scheme's investment universe and risk profile.

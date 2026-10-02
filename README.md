@@ -1,11 +1,17 @@
 # Mutual Fund FAQ Assistant — facts-only RAG
 
 A Streamlit chatbot that answers factual questions about **five HDFC AMC mutual fund schemes** from
-public scheme pages, and refuses everything else. Every answer is assembled from retrieved chunks,
-carries exactly one citation from a fixed source registry, and is at most three sentences long. It
-never states a return, a NAV, or a performance figure, because the system has no way to compute one.
+public scheme pages, and general **mutual-fund definitions** from a set of AI-written education
+summaries. Everything else is refused. Every answer is assembled from retrieved chunks, carries
+exactly one citation from a fixed source registry, and is at most three sentences long. It never
+states a return, a NAV, or a performance figure, because the system has no way to compute one.
 
-**Scope: HDFC AMC · 5 schemes · 5 of the 7 in-scope fact families · English only · snapshot-based.**
+**Scope: HDFC AMC · 5 schemes + 19 education summaries · 5 of the 7 in-scope fact families ·
+English only · snapshot-based.**
+
+The education summaries are labelled as such: their citations point at the real AMFI/SEBI page the
+summary is based on, and the answer's publisher reads `AI summary of ...`. A local `file://` path is
+never shown to a reader.
 
 The demo runs entirely offline after the first build. There is no cloud service, no API key required,
 and no telemetry.
@@ -17,7 +23,7 @@ and no telemetry.
 ```bash
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt   # fully pinned, incl. transitive deps
-.venv\Scripts\python -m src.pipeline build                # ~16 s -> 106 chunks (~50 s the first time, while the model downloads)
+.venv\Scripts\python -m src.pipeline build                # ~26 s -> 129 chunks across 24 sources (~50 s the first time, while the model downloads)
 .venv\Scripts\python -m streamlit run app.py              # http://localhost:8501
 ```
 
@@ -123,6 +129,7 @@ Behaviour worth knowing before a demo:
 | --- | --- |
 | "What is the expense ratio of the HDFC Large Cap Fund - Direct Growth?" | Answered, with one source link |
 | "What is the exit load on the HDFC ELSS Tax Saver Fund - Direct Plan Growth?" | **Refused** — that page carries no exit-load text |
+| "What is NAV?" | Answered from the education corpus, cited to the AMFI page, labelled `AI summary of ...` |
 | "Which fund should I put my money into for a five year goal?" | **Refused** — that is advice; AMFI link |
 | "Which of these gave the best 1-year return?" | **Redirected** — the system never compares returns |
 | "My PAN is ABCDE1234F, which folio holds my units?" | **Refused** — PII never stored, echoed, or logged |
@@ -394,6 +401,8 @@ the initial load.
 These are enforced by tests, and any change that weakens one has to change a test first:
 
 - The system never returns a citation URL that is not in `data/sources.csv`.
+- The system never returns a `file://` path as a citation: a repository-held education summary is
+  cited at its `citation_url`, the public page it summarises.
 - The system never emits more than 3 sentences in an answer body.
 - The system never computes or compares returns, NAV, or performance — and performance blocks are
   dropped **at ingest**, so there is no return table in the index to leak from.

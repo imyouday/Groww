@@ -1,6 +1,14 @@
 # Secrets
 .env
 
+# Runtime logs. These carry tracebacks with machine paths and (before the app.py:265 fix) raw
+# user query text, so they must never be committed.
+logs/
+
+# Development scratch: one-off inspection, styling and server-probe scripts. Moved out of the
+# repo root so `python -m pytest -q` cannot collect them; kept locally, never committed.
+_scratch/
+
 # Client material
 # The milestone brief is the client's document, not ours. It is deliberately kept out of the public
 # repository and was purged from git history (2026-09-27) before the first push. It stays on the

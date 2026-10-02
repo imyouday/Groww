@@ -183,6 +183,11 @@ class UiSettings:
 
 
 @dataclass(frozen=True)
+class IntentRouterSettings:
+    llm_fallback: bool
+
+
+@dataclass(frozen=True)
 class Settings:
     paths: PathsSettings
     embedding: EmbeddingSettings
@@ -195,6 +200,7 @@ class Settings:
     registry: RegistrySettings
     copy: CopySettings
     ui: UiSettings
+    intent_router: IntentRouterSettings
     source_path: str = ""
 
 
@@ -210,6 +216,7 @@ _SECTIONS: dict[str, type] = {
     "registry": RegistrySettings,
     "copy": CopySettings,
     "ui": UiSettings,
+    "intent_router": IntentRouterSettings,
 }
 
 _ALLOWED_CHUNKING_STRATEGIES = frozenset(strategy.value for strategy in ChunkingStrategy)
@@ -337,6 +344,9 @@ def _build_sections(raw: Mapping[str, Any]) -> dict[str, Any]:
             },
         ),
         "ui": UiSettings(**{f.name: _ui_value(f, raw["ui"]) for f in fields(UiSettings)}),
+        "intent_router": IntentRouterSettings(
+            llm_fallback=bool(raw.get("intent_router", {}).get("llm_fallback", False))
+        ),
     }
 
 

@@ -1,0 +1,15 @@
+**Cut-off Time** determines which day's NAV you get for your transaction.
+
+- **Liquid / Overnight Funds**: 1:30 PM (purchase/redemption)
+- **All Other Schemes**: 3:00 PM (purchase/redemption)
+- **Switch**: Same as purchase cut-off of target scheme
+
+Orders placed before cut-off get that day's NAV; after cut-off get the next business day's NAV. Weekends and exchange holidays are non-business days.
+
+**NFO (New Fund Offer)** is the initial subscription period for a new scheme (typically 15 days). Units are allotted at face value (₹10). After NFO closes, the scheme opens for ongoing subscription/redemption at prevailing NAV. NFOs have no track record — evaluate the fund house, manager, and category instead of the "₹10 NAV."
+
+**Redemption Timelines (payout to bank account)**:
+- Liquid / Overnight: T+1 business day
+- Debt / Hybrid / Equity: T+2 business days (T+3 for some AMCs)
+- FoF / International: T+5 business days
+The amount is credited to your registered bank account.

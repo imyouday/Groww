@@ -1,0 +1,3 @@
+**Expense Ratio (Total Expense Ratio or TER)** is the annual fee a mutual fund charges for managing your investment, expressed as a percentage of the fund's average daily net assets.
+
+TER covers fund management fees, distributor commissions, registrar fees, custodian fees, audit fees, and other operating expenses. It is deducted daily from the fund's NAV — you don't pay it separately. A lower TER means more of the fund's returns stay with you. SEBI sets maximum TER limits by scheme category and AUM slab. Direct plans have lower TER than regular plans because they exclude distributor commissions.

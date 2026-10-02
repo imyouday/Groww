@@ -1,18 +1,33 @@
+# Local-first defaults, bound to loopback. This is not a LAN or public posture: the app has no
+# authentication, and `showErrorDetails = "full"` below surfaces real tracebacks.
+# For an external deploy, put authentication in front of the app, set `showErrorDetails` back to a
+# production-safe value, and change `address` deliberately — do not disable XSRF to make that work.
+
+[server]
+headless = true
+# Loopback by default. Streamlit's own default is 0.0.0.0, which publishes the app, and the app
+# has no authentication, on any machine that does not set this explicitly.
+address = "127.0.0.1"
+enableCORS = true
+enableXsrfProtection = true
+# The venv is inside the repo. Without this the watcher crawls ~49k files including the 1.6 GB
+# virtualenv on every save.
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Surface the real exception instead of a generic page. The app no longer logs query text, so the
+# traceback shown here is the only diagnostic a single user gets.
+showErrorDetails = "full"
+
 [theme]
+# src/theme.py owns the runtime light/dark toggle. These values are the light-mode baseline that
+# loads before the first rerun completes.
 base = "light"
 primaryColor = "#00D09C"
 backgroundColor = "#F4F6F8"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#1E293B"
 font = "sans serif"
-
-[server]
-headless = true
-enableCORS = false
-enableXsrfProtection = false
-
-[browser]
-gatherUsageStats = false
-
-[client]
-showErrorDetails = "none"

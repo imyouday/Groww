@@ -84,7 +84,8 @@ def test_representative_values_match_architecture_section_20(settings: Settings)
     assert settings.retrieval.boosts.section_type_match == 0.03
     assert settings.guardrails.max_sentences == 3
     assert settings.guardrails.enforce_numeric_grounding is True
-    assert settings.generation.provider == "auto"
+    assert settings.generation.provider == "extractive"
+
     assert "groww.in" in settings.loading.allowed_hosts
 
 

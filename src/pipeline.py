@@ -437,6 +437,26 @@ def answer(
     return result
 
 
+def redact_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return conversation history with every turn's text run through the PII redactor.
+
+    History is the one place an identifier can survive a turn that passed its own check, so it is
+    scrubbed before any caller is allowed to transmit it.
+    """
+    from src.pii import redact as _redact
+
+    cleaned: list[dict[str, Any]] = []
+    for turn in history:
+        if not isinstance(turn, dict):
+            continue
+        entry = dict(turn)
+        text = entry.get("text")
+        if isinstance(text, str):
+            entry["text"] = _redact(text)
+        cleaned.append(entry)
+    return cleaned
+
+
 def _answer(
     query: str,
     provider: str | None = None,
@@ -460,11 +480,27 @@ def _answer(
     classification = classify(query, resolved)
     pii_hits = has_pii(query)
 
-    # Run intent router with conversation history
-    router_result = route_intent(query, history or [], resolved)
+    # PII takes priority, and it is checked BEFORE the intent router is allowed to run. The router
+    # posts the query and the recent history to a third-party LLM endpoint, so a query that carries
+    # an identifier must be refused without ever leaving this process. (It used to be gated on
+    # `router_result` too, which meant the LLM call had already happened by the time this branch was
+    # reached.)
+    if pii_hits or classification.intent is Intent.PII_REQUEST:
+        refusal = guardrails.route(Intent.PII_REQUEST, None, None, registry, resolved)
+        return replace(
+            refusal,
+            trace={
+                **refusal.trace,
+                "pii_kinds": sorted({hit.kind.value for hit in pii_hits}),
+                "pii_hit_count": len(pii_hits),
+                "timings_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 2)},
+            },
+        )
 
-    # PII takes priority
-    if pii_hits or classification.intent is Intent.PII_REQUEST or router_result.intent is RouterIntent.PII:
+    # Run intent router with conversation history. The history is redacted first: a turn from an
+    # earlier question can still carry an identifier, and the router sends these strings verbatim.
+    router_result = route_intent(query, redact_history(history or []), resolved)
+    if router_result.intent is RouterIntent.PII:
         refusal = guardrails.route(Intent.PII_REQUEST, None, None, registry, resolved)
         return replace(
             refusal,

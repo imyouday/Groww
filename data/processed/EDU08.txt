@@ -1,0 +1,6 @@
+Every mutual fund scheme offers two plans: **Direct** and **Regular**.
+
+- **Direct Plan**: Units are bought directly from the AMC, with no distributor. The expense ratio (TER) excludes distributor commission.
+- **Regular Plan**: Units are bought through a distributor or broker, so the TER includes distributor commission.
+
+The portfolio, fund manager, and investment objective are identical. The only difference is the cost structure. Switching from Regular to Direct is treated as a redemption, so exit load and capital gains tax may apply. Which plan is preferable depends on your own situation, so compare the two published expense ratios and check them with your advisor.

@@ -220,7 +220,7 @@ class SourceType(str, Enum):
     KIM        = "kim"
     SID        = "sid"
     FEE_PAGE   = "fee_page"
-    EDUCATION  = "education"   # refusal-link sources only
+    EDUCATION  = "education"   # AI-summary corpus (EDU*) plus refusal-link sources (E1, E2)
 
 class SectionType(str, Enum):
     FEES = "fees"            # expense ratio, TER, exit load, minimums
@@ -253,6 +253,11 @@ class SourceRecord:
     title: str; url: str; publisher: str
     allowed_for_citation: bool; fetched_at: str   # ISO-8601 date
     content_hash: str | None = None; notes: str = ""
+    citation_url: str = ""                        # reader-facing URL when `url` is a local file
+
+    @property
+    def citable_url(self) -> str:
+        return self.citation_url or self.url
 
 @dataclass(frozen=True)
 class LoadedDoc:
@@ -332,8 +337,9 @@ class Answer:
 
 ```
 for source in registry.sources():
-    if source.source_type is EDUCATION: continue          # E1/E2 are refusal-only, never ingested
-    assert_url_host_allowed(source.url)                   # C1 enforcement, before any socket opens
+    if source.source_type is EDUCATION and not source.source_id.startswith("EDU"):
+        continue                                          # E1/E2 are refusal links, never ingested
+    assert_url_allowed(source.url, settings)              # C1 for fetch URLs; file:// must be repo-contained
     client = new_http_client() if this source needs a fetch else None
 
     cached = data/raw/{source_id}.html|.md
@@ -1176,8 +1182,8 @@ retrieval:
     statements:    ["capital gains", "statement", "tax report", "download"]
 
 generation:
-  provider: auto                    # auto | llm | extractive   (ablation A4)
-  model: <free-tier model id>
+  provider: extractive               # auto | llm | extractive   (ablation A4); shipped default
+  model: <free-tier model id>         # only read when provider is auto/llm
   temperature: 0.1
   max_tokens: 220
   timeout_s: 8

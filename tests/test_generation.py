@@ -169,19 +169,30 @@ class TestExtractiveGenerator:
 
 
 class TestResolveGenerator:
+    def test_default_provider_is_extractive(self) -> None:
+        from src.config import load_settings
+
+        assert load_settings().generation.provider == "extractive"
+
     def test_auto_without_a_key_chooses_extractive(self) -> None:
-        generator, name = resolve_generator(env=env_with())
+        generator, name = resolve_generator(
+            settings=_settings_with_provider("auto"), env=env_with()
+        )
         assert name == "extractive"
         assert isinstance(generator, ExtractiveGenerator)
 
     def test_auto_with_a_key_chooses_llm(self) -> None:
         env = env_with(api_key="k", base_url="https://example.test/v1", model="m")
-        generator, name = resolve_generator(env=env)
+        generator, name = resolve_generator(
+            settings=_settings_with_provider("auto"), env=env
+        )
         assert name == "llm"
         assert isinstance(generator, LLMGenerator)
 
     def test_auto_with_a_key_but_no_endpoint_degrades(self) -> None:
-        _, name = resolve_generator(env=env_with(api_key="k"))
+        _, name = resolve_generator(
+            settings=_settings_with_provider("auto"), env=env_with(api_key="k")
+        )
         assert name == "extractive"
 
     def test_explicit_extractive_wins_even_with_a_key(self) -> None:

@@ -68,26 +68,43 @@ _NUMBER = (
 )
 _NUMBER_RE = re.compile(_NUMBER, re.IGNORECASE)
 _URL_RE = re.compile(r"(?:https?://|www\.|\b\w+\.(?:com|in|org|net)\b)", re.IGNORECASE)
+# Any explicit URI scheme, not just http(s). `javascript:`, `data:` and `file:` all render or execute
+# in a browser, and the answer body is written into the page with unsafe_allow_html. A scheme
+# keyword is required here so ordinary prose ("the data: 5 funds") is not a false positive.
+_DANGEROUS_SCHEME_RE = re.compile(
+    r"\b(?:javascript|vbscript|data|file|blob)\s*:", re.IGNORECASE
+)
+# Raw angle-bracket markup. The answer body is injected unescaped, so a tag from the model is an
+# injection primitive even without a URL in it.
+_HTML_TAG_RE = re.compile(r"</?[a-zA-Z][^>]*>|<!--")
 _ATTRIBUTION_RE = re.compile(
     r"\b(?:according to|as per|as stated in|as mentioned in|quoted from|sourced from|per the website)\b",
     re.IGNORECASE,
 )
+
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 _HAS_DIGIT_RE = re.compile(r"\d")
 _VOCABULARY_MIN_LEN = 4
 
 
 def split_sentences(text: str) -> list[str]:
-    """Split text into sentences without breaking on abbreviations, initials, or decimals."""
+    """Split text into sentences without breaking on abbreviations, initials, or decimals.
+
+    A newline is also a boundary. A bulleted or line-formatted answer ("- fee 1.03%\\n- SIP 100")
+    has no sentence-ending punctuation, so a splitter that only looks for `[.!?]` counts it as one
+    sentence and walks straight past the three-sentence cap.
+    """
     masked = text
     for abbreviation in _ABBREVIATIONS:
         masked = masked.replace(abbreviation, abbreviation.replace(".", _PLACEHOLDER))
     masked = re.sub(r"(?<=[A-Z])\.(?=\s|$)", _PLACEHOLDER, masked)
     sentences: list[str] = []
-    for part in _SENTENCE_SPLIT.split(masked):
-        cleaned = part.replace(_PLACEHOLDER, ".").strip()
-        if cleaned:
-            sentences.append(cleaned)
+    for line in re.split(r"[\r\n]+", masked):
+        for part in _SENTENCE_SPLIT.split(line):
+            cleaned = part.replace(_PLACEHOLDER, ".").strip()
+            cleaned = cleaned.lstrip("-*• \t").strip()
+            if cleaned:
+                sentences.append(cleaned)
     return sentences
 
 
@@ -170,18 +187,43 @@ def numeric_tokens(text: str) -> list[str]:
     return list(seen)
 
 
+def _token_pattern(token: str) -> re.Pattern[str]:
+    """Build a boundary-anchored matcher for one collapsed numeric token.
+
+    The leading lookbehind and trailing lookahead are what make this a *number* comparison rather
+    than a character comparison. Without them "Rs 10" matches inside "Rs 100" and "5 years" matches
+    inside "15 years", which let the model understate or alter any figure while passing the
+    grounding check. The lookbehind rejects a preceding digit, a decimal point, and a thousands
+    separator (`1,000`), but *not* a bare comma: the corpus writes "the investment,1% will be
+    charged", and blocking that would reject a figure the source states verbatim. Whitespace inside
+    the token is matched flexibly so that collapsing the haystack cannot change the verdict.
+    """
+    parts = [re.escape(part) for part in token.split() if part]
+    if not parts:
+        return re.compile(r"(?!)")
+    body = r"\s+".join(parts)
+    return re.compile(rf"(?<!\d)(?<!\.)(?<!\d,){body}(?![\d])", re.IGNORECASE)
+
+
 def V4_numeric_grounding(
     text: str, context: AssembledContext | str | None
 ) -> tuple[bool, list[str]]:
     """Require every number in the draft to appear verbatim in the context (V4, constraint C3).
 
-    Containment is over the digit string rather than over a parsed value on purpose: a parsed
-    comparison would accept 0.450 for 0.45, and rounding a fee is exactly the failure this check
-    exists to catch. The returned tokens are digits, never personal data, so they are safe to log.
+    The match is over the digit string rather than a parsed value on purpose: a parsed comparison
+    would accept 0.450 for 0.45, and rounding a fee is exactly the failure this check exists to
+    catch. Each token must match as a whole number at a token boundary, so a draft figure that is
+    merely a substring of a context figure is rejected. The returned tokens are digits, never
+    personal data, so they are safe to log.
     """
     haystack = _collapse(_context_text(context))
-    ungrounded = [token for token in numeric_tokens(text) if token not in haystack]
+    ungrounded = [
+        token
+        for token in numeric_tokens(text)
+        if haystack and _token_pattern(token).search(haystack) is None
+    ]
     return (not ungrounded, ungrounded)
+
 
 
 def V5_banned_terms(
@@ -218,8 +260,14 @@ def V5_banned_terms(
 
 
 def V6_no_urls(text: str) -> bool:
-    """Report whether the draft is free of URLs and external attributions (V6, constraint C5)."""
-    return _URL_RE.search(text) is None and _ATTRIBUTION_RE.search(text) is None
+    """Report whether the draft is free of URLs, markup, and external attributions (V6, constraint C5)."""
+    return (
+        _URL_RE.search(text) is None
+        and _DANGEROUS_SCHEME_RE.search(text) is None
+        and _HTML_TAG_RE.search(text) is None
+        and _ATTRIBUTION_RE.search(text) is None
+    )
+
 
 
 def validation_report(
@@ -307,9 +355,23 @@ def build_answer(
     cfg = settings or load_settings()
     reg = _registry_or_default(registry)
     top = context.chunks[0] if context.chunks else None
-    citable = top is not None and reg.is_citation_allowed(top.chunk.url)
-    citation_url = top.chunk.url if citable else None
-    source_id = top.chunk.source_id if top is not None and reg.source_by_id(top.chunk.source_id) else None
+    # The citation is resolved through the registry by source id, not by reading the chunk's own
+    # `url`. A chunk's url is where the text was read from, which for an education file is a
+    # `file://` path in this repository; the URL a reader can open lives in the registry row. The
+    # chunk's url is still checked against its own registry row, so a chunk whose provenance and
+    # source id disagree cites nothing rather than citing the wrong page. The allowlist check below
+    # remains a full-string match, so an unregistered source still yields no citation.
+    source = reg.source_by_id(top.chunk.source_id) if top is not None else None
+    provenance_matches = source is not None and top is not None and top.chunk.url in (
+        source.url,
+        source.citable_url,
+    )
+    source_id = source.source_id if provenance_matches else None
+    citable_url = reg.citation_url_for(source_id) if source_id else ""
+    citable = bool(citable_url) and reg.is_citation_allowed(citable_url)
+    citation_url = citable_url if citable else None
+
+
     trace: dict[str, Any] = {
         "stage": "guardrails",
         "kind": "factual",
@@ -388,15 +450,15 @@ def _get_greeting_template(cfg: Settings, scheme_count: int) -> str:
     """Get a rotating greeting template from config or use built-in fallbacks."""
     templates_list = getattr(cfg.copy, "greeting_templates", None)
     if templates_list and isinstance(templates_list, (list, tuple)) and len(templates_list) > 0:
-        return random.choice(templates_list)
+        return random.choice(templates_list).format(scheme_count=scheme_count)
     # Built-in fallbacks
     fallbacks = [
-        "Hi there! 👋 Great to see you. I can explain mutual fund basics and share facts about {count} HDFC schemes. What would you like to know?",
+        "Hi there! Great to see you. I can explain mutual fund basics and share facts about {scheme_count} HDFC schemes. What would you like to know?",
         "Hello! I'm ready to help with HDFC mutual fund facts — expense ratios, exit loads, SIP minimums, lock-ins, and more. What's on your mind?",
-        "Hey! 👋 Happy to assist. Ask me anything about the HDFC schemes I cover.",
+        "Hey! Happy to assist. Ask me anything about the HDFC schemes I cover.",
         "Hi! I can share verified facts about HDFC mutual fund schemes. What would you like to learn?",
     ]
-    return random.choice(fallbacks).format(count=scheme_count)
+    return random.choice(fallbacks).format(scheme_count=scheme_count)
 
 
 def _generate_greeting(cfg: Settings, reg: Registry) -> str:

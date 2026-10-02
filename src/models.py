@@ -100,6 +100,17 @@ class SourceRecord:
     fetched_at: str
     content_hash: str | None = None
     notes: str = ""
+    citation_url: str = ""
+
+    @property
+    def citable_url(self) -> str:
+        """Return the URL a reader should open, which is not always the URL the document is read from.
+
+        `url` is where the document is fetched. For an education file held in the repository that is
+        a `file://` path, which is useless to a reader, so `citation_url` carries the public page the
+        summary is based on. When it is absent the source is citable only at its own fetch URL.
+        """
+        return self.citation_url or self.url
 
 
 @dataclass(frozen=True)

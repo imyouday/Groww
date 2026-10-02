@@ -164,7 +164,7 @@ def test_chunk_relevance_needs_the_scheme_and_the_fact_term() -> None:
 
 def test_fact_terms_map_the_golden_csvs_family_labels_onto_the_configured_lists() -> None:
     """The CSV says `risk_rating`; the config says `riskometer`. The alias table is the bridge."""
-    assert checks.fact_terms_for("risk_rating") == ("riskometer", "risk")
+    assert checks.fact_terms_for("risk_rating") == ("riskometer", "risk", "risk rating")
     assert checks.fact_terms_for("expense_ratio") == (
         "expense ratio",
         "ter",

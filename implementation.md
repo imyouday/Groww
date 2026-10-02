@@ -279,6 +279,8 @@ and `python -m pytest -q`. Paste the output.
 - [x] `data/sources.csv` with the exact header from `PRD.md` §13:
   `source_id,scheme_id,scheme_name,source_type,title,url,publisher,allowed_for_citation,fetched_at,notes`
 - [x] Populate from the Phase 0 decision: the 5 scheme URLs, plus any HDFC AMC / AMFI / SEBI pages added in Phase 0. `source_id` = `S1`…`S5` for schemes, `E1`, `E2`… for education/refusal links. `allowed_for_citation=false` for education-only sources. 7 rows: E1 (AMFI) and E2 (Groww Help) are `false`; S1–S5 are `true`. No HDFC/AMFI/SEBI page was added as a corpus source, because Phase 0 rejected all of them.
+  - **Later phase:** the registry grew to 26 rows — `EDU01`–`EDU19` are AI-written education summaries ingested from `data/raw/EDU*.md`, and they are citable. Their `url` stays `file://data/raw/EDU*.md` (the ingest path) while a trailing optional `citation_url` column carries the real AMFI/SEBI page a reader opens. `SourceRecord.citable_url` prefers it, so a `file://` path is never shown as a citation. E1/E2 remain `false`.
+
 - [x] Add a `render` hint column **only if** Phase 0 found rendered content is required (e.g. `render=md`); otherwise leave it out and note that in the README. Left out — the header is exactly the 10 columns above, per Phase 0 §4.1 ("all 5 are server-rendered"). The reason is recorded in `docs/corpus_matrix.md`; the README states the pages are distributor-hosted rather than repeating the column decision.
 - [x] `src/registry.py`:
   - `class Registry` with `sources: tuple[SourceRecord, ...]`, `schemes: dict[str, SchemeInfo]`

@@ -208,35 +208,30 @@ def _rules_classify(text: str) -> RouterResult | None:
                 reasoning="Performance pattern matched",
             )
 
-    # Definition questions (general, no scheme mentioned)
+    # Definition questions
     for pattern in DEFINITION_PATTERNS:
         if re.search(pattern, lower, re.IGNORECASE):
-            # Check if a scheme is explicitly mentioned
             scheme_id = _resolve_scheme(text)
-            # Check fact family - only truly education-only topics (no scheme-specific data)
-            # use DEFINITION even when scheme is mentioned
-            from src.intents import resolve_fact_family
-            from src.config import load_settings
-            fact_family = resolve_fact_family(text, load_settings())
-            education_only_families = {"lock_in"}
-            if scheme_id is None or fact_family.value in education_only_families:
+            # A named scheme always wins. The rule used to carve "lock_in" out into the education
+            # path even when a scheme was named, so "Is there a lock-in on the ELSS tax saver fund?"
+            # was answered with a generic ELSS definition instead of the scheme's own page (or a
+            # refusal when the page does not state it). Definitions are for concept questions that
+            # name no scheme.
+            if scheme_id is None:
                 return RouterResult(
                     intent=RouterIntent.DEFINITION,
                     scheme_id=None,
                     original_intent=Intent.FACTUAL_FACT,
                     confidence=0.85,
-                    reasoning="Definition pattern matched, using education retrieval"
-                    if fact_family.value in education_only_families
-                    else "Definition pattern matched, no scheme mentioned",
+                    reasoning="Definition pattern matched, no scheme mentioned",
                 )
-            else:
-                return RouterResult(
-                    intent=RouterIntent.SCHEME_FACT,
-                    scheme_id=scheme_id,
-                    original_intent=Intent.FACTUAL_FACT,
-                    confidence=0.85,
-                    reasoning="Definition pattern matched with scheme mentioned",
-                )
+            return RouterResult(
+                intent=RouterIntent.SCHEME_FACT,
+                scheme_id=scheme_id,
+                original_intent=Intent.FACTUAL_FACT,
+                confidence=0.85,
+                reasoning="Definition pattern matched with scheme mentioned",
+            )
 
     return None
 
@@ -248,8 +243,18 @@ def _resolve_scheme(text: str) -> str | None:
     return registry.resolve_scheme(text)
 
 
-def _llm_classify(text: str, history: list[dict[str, str]], settings: Settings) -> RouterResult | None:
-    """Use LLM for classification when rules are inconclusive."""
+def _llm_classify(
+    text: str, history: list[dict[str, str]], settings: Settings
+) -> RouterResult | None:
+    """Use LLM for classification when rules are inconclusive.
+
+    This is a second, undocumented egress: it posts the question and the last four turns to the
+    configured third-party endpoint, on top of the generation call. It is therefore opt-in and off by
+    default, so a deployment that has an LLM key for generation is not silently also shipping user
+    text to a classifier. `intent_router.llm_fallback` in config.yaml turns it back on.
+    """
+    if not getattr(settings.intent_router, "llm_fallback", False):
+        return None
     env = load_llm_env()
     if not env.api_key or not env.base_url or not env.model:
         return None
@@ -257,12 +262,20 @@ def _llm_classify(text: str, history: list[dict[str, str]], settings: Settings) 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
     ]
-    # Add last 4 turns as context
+    # Add last 4 turns as context. The caller redacts these before they get here.
     for turn in history[-4:]:
-        if turn.get("role") == "user":
-            messages.append({"role": "user", "content": turn["text"]})
-        elif turn.get("role") == "assistant":
-            messages.append({"role": "assistant", "content": turn.get("answer", {}).get("text", "")})
+        if not isinstance(turn, dict):
+            continue
+        content = turn.get("text")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        role = turn.get("role")
+        if role in ("user", "assistant"):
+            messages.append({"role": role, "content": content})
+    # The caller supplies PRIOR turns only, so the question being answered is appended once here.
+    # Guarding this on "history already had a user turn" looks like it avoids a double send, but on
+    # the first inconclusive question history is empty and the classifier would be asked to label
+    # the system prompt alone.
     messages.append({"role": "user", "content": text})
 
     payload = {
@@ -339,7 +352,7 @@ def route_intent(
     if result is not None:
         return result
 
-    # LLM fallback
+    # LLM fallback, when the operator has explicitly enabled it
     result = _llm_classify(text, history, resolved)
     if result is not None:
         return result

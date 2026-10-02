@@ -31,6 +31,14 @@ REQUIRED_HEADER: tuple[str, ...] = (
     "notes",
 )
 
+# `citation_url` is optional and must be the last column. It exists because `url` does two jobs:
+# it is both where the document is fetched from and what the reader is sent to. For a source that
+# lives in the repository and summarises a public page (the education set), those differ — the file
+# is read from disk while the citation has to point at the real AMFI/SEBI page. Without a separate
+# column the only citable option was the local path, so those answers carried no source at all.
+CITATION_URL_COLUMN = "citation_url"
+HEADER_WITH_CITATION_URL: tuple[str, ...] = REQUIRED_HEADER + (CITATION_URL_COLUMN,)
+
 _TRUTHY = frozenset({"true", "yes", "1"})
 _WORDISH = re.compile(r"[a-z0-9]+")
 
@@ -62,8 +70,11 @@ class Registry:
 
     def _allowed_urls(self) -> frozenset[str]:
         return frozenset(
-            source.url for source in self.sources if source.allowed_for_citation
+            source.citable_url
+            for source in self.sources
+            if source.allowed_for_citation and source.citable_url
         )
+
 
     def _alias_pairs(self) -> tuple[tuple[str, str], ...]:
         pairs = [
@@ -96,7 +107,8 @@ class Registry:
         source = self.source_by_id(source_id)
         if source is None or not source.allowed_for_citation:
             return ""
-        return source.url
+        return source.citable_url
+
 
     def scheme(self, scheme_id: str) -> SchemeInfo | None:
         """Return the in-scope scheme with this id, or None."""
@@ -139,7 +151,7 @@ def _parse_bool(value: str, source_id: str, field: str) -> bool:
 
 
 def _read_rows(csv_path: Path) -> list[dict[str, str]]:
-    """Read the CSV and validate the header, which must match REQUIRED_HEADER exactly."""
+    """Read the CSV and validate the header, which must match the required columns exactly."""
     if not csv_path.is_file():
         raise PipelineError(
             f"source registry not found: {csv_path}. Run `python -m src.pipeline build` or "
@@ -148,12 +160,14 @@ def _read_rows(csv_path: Path) -> list[dict[str, str]]:
     with csv_path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         header = tuple(reader.fieldnames or ())
-        if header != REQUIRED_HEADER:
+        if header not in (REQUIRED_HEADER, HEADER_WITH_CITATION_URL):
             raise PipelineError(
-                f"{csv_path}: header must be exactly {','.join(REQUIRED_HEADER)}, got "
+                f"{csv_path}: header must be exactly {','.join(REQUIRED_HEADER)} optionally "
+                f"followed by {CITATION_URL_COLUMN}, got "
                 f"{','.join(header) if header else '<empty file>'}"
             )
         return [row for row in reader if any((value or "").strip() for value in row.values())]
+
 
 
 def urlparse_host(url: str) -> str | None:
@@ -189,6 +203,13 @@ def _parse_source(row: dict[str, str], csv_path: Path) -> SourceRecord:
                 f"{csv_path}: source {source_id} has url={url!r}, which is not an https:// URL "
                 "(constraint C1: public https sources only)"
             )
+    citation_url = (row.get(CITATION_URL_COLUMN) or "").strip()
+    if citation_url and urlparse_host(citation_url) is None:
+        raise PipelineError(
+            f"{csv_path}: source {source_id} has {CITATION_URL_COLUMN}={citation_url!r}, which is not "
+            "an https:// URL. A local file:// path is not something a reader can open, so it is not "
+            "a usable citation."
+        )
     return SourceRecord(
         source_id=source_id,
         scheme_id=(row["scheme_id"] or "").strip(),
@@ -201,8 +222,10 @@ def _parse_source(row: dict[str, str], csv_path: Path) -> SourceRecord:
             row["allowed_for_citation"] or "", source_id, "allowed_for_citation"
         ),
         fetched_at=(row["fetched_at"] or "").strip(),
+        citation_url=citation_url,
         notes=(row["notes"] or "").strip(),
     )
+
 
 
 def _build_registry(csv_path: Path, settings: Settings) -> Registry:
@@ -228,15 +251,20 @@ def _build_registry(csv_path: Path, settings: Settings) -> Registry:
     sources.sort(key=lambda item: item.source_id)
     allowed_hosts = set(settings.loading.allowed_hosts)
     for source in sources:
-        # Skip host validation for local education files
-        if source.url.startswith("file://"):
-            continue
-        host = urlparse_host(source.url)
-        if source.allowed_for_citation and host not in allowed_hosts:
-            raise PipelineError(
-                f"{csv_path}: citation-allowed source {source.source_id} points at host {host!r}, "
-                f"which is not in loading.allowed_hosts {sorted(allowed_hosts)} (constraint C1)"
-            )
+        # Only a source that will actually be shown to a reader has to sit on a trusted host, so
+        # this check is on the citable URL. For a local education file that is `citation_url`, the
+        # public page the summary is based on, not the file:// path it is ingested from. Advisory
+        # links such as E1/E2 are never ingested or cited, so they are not gated here.
+        if source.allowed_for_citation:
+            host = urlparse_host(source.citable_url)
+            if host is None or host not in allowed_hosts:
+                raise PipelineError(
+                    f"{csv_path}: citation-allowed source {source.source_id} points at host "
+                    f"{host!r}, which is not in loading.allowed_hosts {sorted(allowed_hosts)} "
+                    "(constraint C1)"
+                )
+
+
 
     page_by_scheme: dict[str, SourceRecord] = {}
     for source in sources:

@@ -8,6 +8,7 @@ import os
 import random
 import re
 import traceback
+from datetime import datetime
 from typing import Any
 
 import streamlit as st
@@ -16,6 +17,25 @@ from src import pipeline
 from src.config import load_settings
 from src.models import Answer, PipelineError
 from src.pipeline import pii_hits
+from src.pii import redact
+
+# Set up file logging for errors. The handler is created inside a try so that a read-only or
+# ephemeral container filesystem degrades to stderr instead of making the module unimportable, and
+# it is attached only once so a Streamlit reload does not stack duplicate handlers.
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+logger = logging.getLogger("groww_app")
+logger.setLevel(logging.ERROR)
+logger.propagate = False
+if not logger.handlers:
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        _handler = logging.FileHandler(
+            os.path.join(LOG_DIR, "app_errors.log"), encoding="utf-8"
+        )
+        _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger.addHandler(_handler)
+    except OSError:
+        logger.addHandler(logging.StreamHandler())
 
 EXAMPLE_QUESTIONS = (
     "What is the expense ratio of the HDFC Large Cap fund?",
@@ -43,6 +63,40 @@ def example_questions(refused: bool) -> tuple[str, ...]:
 def escape(text: str) -> str:
     """Return text safe to place inside raw HTML."""
     return html.escape(text, quote=True)
+
+
+def render_suggestion_chips(labels: tuple[str, ...], key_prefix: str) -> None:
+    """Render suggestion labels as real st.button widgets wired to handle_user_input.
+
+    These were raw <button> markup inside a st.markdown block with an inline <script> to
+    forward the click into the chat input. Streamlit sanitises <script> tags out of markdown,
+    so the listener never registered and the pills rendered but did nothing. A st.button is
+    the only construct that carries a click back to the Python session. The click is handled
+    inline rather than via on_click because handle_user_input renders st.chat_message and
+    st.spinner, which Streamlit rejects during a callback.
+    """
+    columns = st.columns(len(labels))
+    for index, (column, label) in enumerate(zip(columns, labels)):
+        if column.button(label, key=f"{key_prefix}_{index}", use_container_width=True):
+            handle_user_input(label)
+            st.rerun()
+
+
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
+
+
+def _rendered_body(text: str) -> str:
+    """Escape an answer body, then re-apply only the two inline marks the copy actually uses.
+
+    Escaping is unconditional and happens first, so nothing the model produced can reach the page as
+    markup. The bold pass runs on the escaped string, which is why the markers still pair up: `*` is
+    not touched by html.escape, but `<` and `>` and quotes are, so a model-authored tag is inert
+    before it is ever reconsidered.
+    """
+    safe = html.escape(str(text), quote=True)
+    safe = _BOLD_RE.sub(r"<strong>\1</strong>", safe)
+    return safe.replace("\n", "<br>")
+
 
 
 def render_answer(result: Answer) -> list[dict[str, str]]:
@@ -73,9 +127,9 @@ DISCLAIMER = (
 )
 
 GREETING_TEMPLATES = [
-    "Hi there! 👋 Great to see you. I can explain mutual fund basics and share facts about a few HDFC schemes. What would you like to know?",
+    "Hi there! Great to see you. I can explain mutual fund basics and share facts about a few HDFC schemes. What would you like to know?",
     "Hello! I'm ready to help with HDFC mutual fund facts — expense ratios, exit loads, SIP minimums, lock-ins, and more. What's on your mind?",
-    "Hey! 👋 Happy to assist. Ask me anything about the HDFC schemes I cover.",
+    "Hey! Happy to assist. Ask me anything about the HDFC schemes I cover.",
     "Hi! I can share verified facts about HDFC mutual fund schemes. What would you like to learn?",
 ]
 
@@ -92,12 +146,21 @@ UNCLEAR_EXAMPLES = (
 
 
 def load_css() -> str:
-    """Load the compiled CSS from styles.css."""
-    path = "styles.css"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f"<style>{f.read()}</style>"
-    return ""
+    """Load the compiled CSS from styles.css, anchored to the repo root.
+
+    The path used to be relative, so an app started from any other working directory silently lost
+    the entire stylesheet and rendered unstyled. A missing stylesheet is also a real problem worth
+    saying out loud rather than returning "".
+    """
+    from src.config import REPO_ROOT
+
+    path = REPO_ROOT / "styles.css"
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return f"<style>{handle.read()}</style>"
+    except OSError as exc:
+        logger.error("Could not read stylesheet %s: %s", path, exc)
+        return ""
 
 
 def top_bar() -> str:
@@ -183,17 +246,22 @@ def warm_index() -> dict[str, Any]:
 
 def handle_user_input(user_text: str) -> None:
     """Process a user message: append to history, generate assistant reply, append reply."""
-    # Append user message immediately
-    st.session_state.messages.append({"role": "user", "text": user_text})
-    
-    # Check for PII before calling pipeline
+    # Check for PII before the turn ever enters session_state. The history is rebuilt from
+    # session_state and handed to the pipeline, which may forward it to the intent router's LLM, so
+    # a refused identifier must not be sitting in that list waiting for the next question.
     pii_kinds = pii_hits(user_text)
     if pii_kinds:
         refusal_text = (
-            "Please don't share personal identifiers like PAN, Aadhaar, account numbers, or OTPs — "
+            "Please don't share personal identifiers like PAN, Aadhaar, account numbers, or OTPs - "
             "I won't store them. For account-specific help, use the official support channel: "
             "https://groww.in/help"
         )
+        # Store a redacted marker, never the message. The refusal tells the user the turn was not
+        # kept, and appending the raw text here would make that a lie while leaving the identifier
+        # in session_state for the rest of the session. redact() replaces each identifier with a
+        # kind label, so the transcript keeps its turn structure with no part of the value.
+        redacted_user_text, _ = redact(user_text)
+        st.session_state.messages.append({"role": "user", "text": redacted_user_text})
         st.session_state.messages.append({
             "role": "assistant",
             "text": post_process_answer(refusal_text),
@@ -201,6 +269,9 @@ def handle_user_input(user_text: str) -> None:
             "followups": []
         })
         return
+
+
+    st.session_state.messages.append({"role": "user", "text": user_text})
     
     # Handle unclear questions before calling pipeline
     if is_unclear(user_text):
@@ -217,9 +288,10 @@ def handle_user_input(user_text: str) -> None:
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("Thinking…"):
             try:
-                # Build history for context (last 4 turns)
+                # Build history for context (last 4 turns, excluding the current question, which is
+                # already passed separately to pipeline.answer).
                 history = []
-                for msg in st.session_state.messages[-8:]:  # last 4 user+assistant pairs
+                for msg in st.session_state.messages[:-1][-8:]:
                     if msg["role"] == "user":
                         history.append({"role": "user", "text": msg["text"]})
                     elif msg["role"] == "assistant" and "text" in msg:
@@ -248,8 +320,12 @@ def handle_user_input(user_text: str) -> None:
                     "followups": followups
                 })
             except Exception as exc:
-                # Log full traceback to terminal
-                logging.exception("Pipeline error: %s", exc)
+                # Log the exception type and traceback only. The query text itself is never logged:
+                # this logger is not covered by the pipeline's field allowlist, so anything written
+                # here lands on disk verbatim, and the invariant is that the app never logs an
+                # identifier it failed to detect.
+                logger.error("Pipeline error (%s):\n%s", type(exc).__name__, traceback.format_exc())
+
                 # Friendly error message in UI
                 error_msg = (
                     "Sorry, something went wrong on my side. Please try again in a moment."
@@ -263,33 +339,48 @@ def handle_user_input(user_text: str) -> None:
 
 
 def render_message(msg: dict[str, Any], is_latest: bool = False) -> None:
-    """Render a single message from session state."""
+    """Render a single message from session state using columns for reliable alignment."""
+    # Both bubbles are written with unsafe_allow_html so the surrounding div keeps its class, which
+    # means every character of text inside must be escaped by hand. Assistant text reaches this
+    # point having passed the guardrails, but V6 blocks URLs and markup rather than sanitising
+    # HTML, and a user bubble is not validated at all, so the escape is the boundary that matters.
     if msg["role"] == "user":
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(msg["text"])
+        # User message: right-aligned using columns (1:3 ratio = 25% spacer, 75% bubble)
+        spacer, bubble_col = st.columns([1, 3])
+        with bubble_col:
+            st.markdown(
+                f'<div class="groww-user-bubble">{html.escape(str(msg["text"]))}</div>',
+                unsafe_allow_html=True,
+            )
     else:
-        with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(msg["text"])
-            # Source line
-            if msg.get("citation_url"):
-                source_text = "Source document"
-                if msg.get("last_updated"):
-                    source_text += f" · Updated {msg['last_updated']}"
-                st.markdown(
-                    f'<div class="groww-source-line">'
-                    f'<a href="{html.escape(msg["citation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">'
-                    f'{source_text}</a></div>',
-                    unsafe_allow_html=True,
-                )
-            # Follow-up chips - ONLY for the latest assistant message
-            if is_latest:
-                followups = msg.get("followups", [])
-                if followups:
-                    cols = st.columns(len(followups))
-                    for idx, followup in enumerate(followups):
-                        if cols[idx].button(followup, key=f"followup_{len(st.session_state.messages)}_{idx}", use_container_width=True):
-                            handle_user_input(followup)
-                            st.rerun()
+        # Assistant message: single column with avatar inside bubble
+        st.markdown(
+            '<div class="groww-assistant-bubble-with-avatar">'
+            '<div class="groww-assistant-avatar">G</div>'
+            f'<div class="groww-assistant-bubble-content">{_rendered_body(msg["text"])}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        # Source line
+        if msg.get("citation_url"):
+            source_text = "Source document"
+            if msg.get("last_updated"):
+                source_text += f" · Updated {msg['last_updated']}"
+            st.markdown(
+                f'<div class="groww-source-line">'
+                f'<a href="{html.escape(msg["citation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">'
+                f'{source_text}</a></div>',
+                unsafe_allow_html=True,
+            )
+        # Follow-up chips - ONLY for the latest assistant message
+        if is_latest:
+            followups = msg.get("followups", [])
+            if followups:
+                cols = st.columns(len(followups))
+                for idx, followup in enumerate(followups):
+                    if cols[idx].button(followup, key=f"followup_{len(st.session_state.messages)}_{idx}", use_container_width=True):
+                        handle_user_input(followup)
+                        st.rerun()
 
 
 def main() -> None:
@@ -321,8 +412,9 @@ def main() -> None:
 
     try:
         facts = warm_index()
-    except PipelineError as error:
-        st.error(f"Failed to load index: {error}")
+    except Exception as error:
+        logger.exception("Failed to load index")
+        st.error("Failed to load the knowledge index. Please refresh the page.")
         st.markdown(disclaimer(), unsafe_allow_html=True)
         return
 
@@ -338,20 +430,14 @@ def main() -> None:
 
     # Empty state: show greeting and chips only when no messages
     if not st.session_state.messages:
-        st.markdown("""
+        scheme_count = facts.get('scheme_count', 5)
+        st.markdown(f"""
         <div class="groww-empty-state">
-            <div class="groww-greeting">Ask me anything about HDFC mutual fund schemes</div>
+            <div class="groww-greeting">Ask me anything about {scheme_count} HDFC mutual fund schemes</div>
             <div class="groww-subtext">I can share facts about expense ratios, exit loads, SIP minimums, lock-ins, and more.</div>
-            <div class="groww-chips" id="groww-chips"></div>
         </div>
         """, unsafe_allow_html=True)
-        
-        # Render chips as Streamlit buttons
-        cols = st.columns(3)
-        for idx, question in enumerate(EXAMPLE_QUESTIONS):
-            if cols[idx].button(question, key=f"chip_{idx}", use_container_width=True):
-                st.session_state.queued_prompt = question
-                st.rerun()
+        render_suggestion_chips(EXAMPLE_QUESTIONS, key_prefix="empty_chip")
 
     st.markdown(disclaimer(), unsafe_allow_html=True)
 

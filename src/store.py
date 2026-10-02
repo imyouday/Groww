@@ -164,14 +164,32 @@ def get_collection(settings: Settings | None = None) -> chromadb.Collection:
     )
 
 
-def open_collection(settings: Settings | None = None) -> chromadb.Collection:
-    """Return the collection for the query path, creating a fresh handle each call.
+_READ_PATH_CACHE: dict[tuple[str, str], chromadb.Collection] = {}
 
-    The collection handle can go stale if the collection is deleted and recreated (e.g. during
-    re-ingestion). Creating a fresh handle per request is cheap (~1-2ms) and guarantees we never
-    hold a dead UUID.
+
+def forget_cached_collections() -> None:
+    """Drop every memoised read-path handle, for `reset` and for tests that rebuild the store."""
+    _READ_PATH_CACHE.clear()
+
+
+def open_collection(settings: Settings | None = None) -> chromadb.Collection:
+    """Return the collection for the query path, reusing one handle per store.
+
+    Opening a client and resolving a collection costs on the order of tens of milliseconds, and the
+    read path used to do it twice per question. The handle is memoised on the store directory and
+    collection name — the only two things that make a handle invalid — and `reset` clears the cache,
+    so a rebuild cannot leave a caller holding a deleted collection's UUID. The build path
+    deliberately still uses `get_collection`, which always resolves a fresh handle.
     """
-    return get_collection(settings)
+    resolved = settings or load_settings()
+    key = (str(resolved.paths.resolve("chroma_dir")), resolved.chroma.collection_name)
+    cached = _READ_PATH_CACHE.get(key)
+    if cached is not None:
+        return cached
+    handle = get_collection(resolved)
+    _READ_PATH_CACHE[key] = handle
+    return handle
+
 
 
 def metadata_for(chunk: ChunkRecord) -> dict[str, str | int]:
@@ -383,6 +401,7 @@ def reset(settings: Settings | None = None) -> None:
     existing = [found.name for found in client.list_collections()]
     if name in existing:
         client.delete_collection(name)
+    forget_cached_collections()
     get_collection(resolved)
 
 

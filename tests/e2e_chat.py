@@ -24,7 +24,20 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 
-STREAMLIT_URL = "http://localhost:8501"
+def _get_free_port() -> int:
+    """Find a free port for the Streamlit app."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def _build_streamlit_url(port: int) -> str:
+    return f"http://localhost:{port}"
+
+
+STREAMLIT_PORT = _get_free_port()
+STREAMLIT_URL = _build_streamlit_url(STREAMLIT_PORT)
 SCREENSHOT_DIR = Path("/tmp/ui-check")
 SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -34,23 +47,31 @@ class StreamlitApp:
 
     def __init__(self, url: str = STREAMLIT_URL):
         self.url = url
+        self.port = int(url.split(":")[-1])
         self.process: subprocess.Popen | None = None
 
     def start(self) -> None:
         """Start the Streamlit app."""
         if self.process is not None:
             return
+        # Kill any existing process on the port
+        import subprocess
+        subprocess.run(["taskkill", "/F", "/IM", "streamlit.exe"], capture_output=True)
+        time.sleep(2)
         env = os.environ.copy()
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+        print(f"Starting Streamlit on port {self.port}...")
         self.process = subprocess.Popen(
-            [sys.executable, "-m", "streamlit", "run", "app.py", "--server.port=8501", "--server.headless=true"],
+            [sys.executable, "-m", "streamlit", "run", "app.py", f"--server.port={self.port}", "--server.headless=true"],
             cwd=Path(__file__).resolve().parents[1],
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
         # Wait for app to start
-        time.sleep(8)
+        print("Waiting for Streamlit to start...")
+        time.sleep(15)
+        print(f"Streamlit process PID: {self.process.pid}, return code: {self.process.poll()}")
 
     def stop(self) -> None:
         """Stop the Streamlit app."""
@@ -72,8 +93,22 @@ class StreamlitApp:
 
 @pytest.fixture(scope="session")
 def app() -> StreamlitApp:
-    """Session-scoped fixture to start/stop Streamlit app."""
+    """Session-scoped fixture to start/stop Streamlit app.
+    
+    If a Streamlit app is already running on the target port, reuse it.
+    Otherwise start a new one.
+    """
     streamlit_app = StreamlitApp()
+    # Check if app is already running on the port
+    import requests
+    try:
+        r = requests.get(streamlit_app.url, timeout=2)
+        if r.status_code == 200 and "prerenderReady" in r.text:
+            print(f"Reusing existing Streamlit app on {streamlit_app.url}")
+            return streamlit_app
+    except:
+        pass
+    
     streamlit_app.start()
     yield streamlit_app
     streamlit_app.stop()
@@ -91,13 +126,15 @@ async def browser(app: StreamlitApp):
 
 
 @pytest.fixture
-async def page(browser):
+async def page(app: StreamlitApp, browser):
     """Page fixture with viewport."""
     context = await browser.new_context(viewport={"width": 1440, "height": 900})
     page = await context.new_page()
-    await page.goto(STREAMLIT_URL, wait_until="networkidle")
+    await page.goto(app.url, wait_until="networkidle")
+    # Wait for Streamlit to fully hydrate - check for the prerenderReady flag
+    await page.wait_for_function("window.prerenderReady === true", timeout=60000)
     # Wait for app to fully load
-    await page.wait_for_selector('[data-testid="stChatInput"]', timeout=30000)
+    await page.wait_for_selector('[data-testid="stChatInput"]', timeout=60000)
     yield page
     await context.close()
 
@@ -120,8 +157,9 @@ class TestChatFlow:
         greeting = await page.locator('.groww-greeting').text_content()
         assert "HDFC mutual fund schemes" in greeting
 
-        # Check for 3 chips
-        chips = page.locator('.groww-chip')
+        # Check for 3 chips. They are real st.button widgets, so they are matched by
+        # Streamlit's own testid rather than the old .groww-chip class, which was raw HTML.
+        chips = page.locator('[data-testid="stMainBlockContainer"] [data-testid="stButton"] button')
         chip_count = await chips.count()
         assert chip_count == 3, f"Expected 3 chips, got {chip_count}"
 
@@ -193,7 +231,7 @@ class TestChatFlow:
         initial_count = await initial_messages.count()
 
         # Click first chip
-        chips = page.locator('.groww-chip')
+        chips = page.locator('[data-testid="stMainBlockContainer"] [data-testid="stButton"] button')
         await chips.first.click()
 
         # Wait for new messages (user + assistant)

@@ -93,18 +93,47 @@ def test_every_citation_allowed_url_is_https_and_on_the_fetch_allowlist(registry
     allowed = set(load_settings().loading.allowed_hosts)
     for source in registry.sources:
         if source.allowed_for_citation:
-            assert source.url.startswith("https://"), source.url
-            assert urlparse_host(source.url) in allowed, source.url
-    # Non-citation sources (education content, refusal links) may use other URL schemes
+            # The citable URL is what a reader opens, which for a repository-held education summary
+            # is `citation_url` and not the file:// path it is ingested from.
+            assert source.citable_url.startswith("https://"), source.citable_url
+            assert urlparse_host(source.citable_url) in allowed, source.citable_url
+    # Non-citation sources (refusal links) may use other URL schemes
 
 
-def test_education_sources_are_never_citationable(registry) -> None:
-    education = [source for source in registry.sources if source.source_type.value == "education"]
-    assert education
-    for source in education:
+def test_education_citation_never_exposes_a_local_path(registry) -> None:
+    # The whole point of citation_url: a local file path is not something a reader can open, so it
+    # must never be reachable as a citation, even though that is the row's `url`.
+    corpus = [s for s in registry.sources if s.source_id.startswith("EDU")]
+    assert corpus
+    for source in corpus:
+        assert source.url.startswith("file://")
+        assert source.allowed_for_citation is True
+        assert source.citable_url.startswith("https://")
+        assert source.citation_url
+        assert registry.citation_url_for(source.source_id) == source.citation_url
+        assert registry.is_citation_allowed(source.citation_url) is True
+        assert registry.is_citation_allowed(source.url) is False
+
+
+def test_education_citation_is_attributed_as_an_ai_summary(registry) -> None:
+    # The text is AI-written, not the cited page's own wording. If that stops being visible to the
+    # reader the citation misrepresents where the words came from.
+    for source in registry.sources:
+        if source.source_id.startswith("EDU"):
+            assert source.publisher.startswith("AI summary of "), source.publisher
+            assert "AI" in source.notes
+
+
+def test_refusal_link_education_sources_are_never_citationable(registry) -> None:
+    # E1/E2 are advisory links used in the PII refusal text. They are not part of the corpus, so
+    # unlike the EDU summaries they stay uncitable.
+    links = [s for s in registry.sources if s.source_id in ("E1", "E2")]
+    assert len(links) == 2
+    for source in links:
         assert source.allowed_for_citation is False
         assert registry.citation_url_for(source.source_id) == ""
         assert registry.is_citation_allowed(source.url) is False
+
 
 
 def test_rejects_wrong_header(tmp_path) -> None:
